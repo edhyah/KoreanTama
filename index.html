@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KoreanTama</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    background: #ffffff;
+    font-family: 'DotGothic16', monospace;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  #world {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #creature-zone {
+    position: relative;
+    margin-top: 20vh;
+  }
+
+  #bird {
+    width: 160px;
+    height: 160px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background-image: url('sprites2/spritesheet_edit.png');
+    background-repeat: no-repeat;
+    /* 5 cols * 160 = 800, 7 rows * 160 = 1120 */
+    background-size: 800px 1120px;
+    background-position: 0 0;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Thought bubble */
+  #thought-bubble {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 3px solid #5a4e3c;
+    border-radius: 16px 16px 16px 4px;
+    white-space: nowrap;
+    font-size: 16px;
+    color: #5a4e3c;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    z-index: 3;
+    box-shadow: 2px 2px 0px #d4c9b8;
+  }
+
+  #thought-bubble.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #thought-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 18px;
+    width: 8px;
+    height: 8px;
+    background: #fff;
+    border-right: 3px solid #5a4e3c;
+    border-bottom: 3px solid #5a4e3c;
+    border-radius: 0 0 4px 0;
+    transform: rotate(45deg);
+  }
+
+  /* Food options */
+  #food-menu {
+    position: absolute;
+    bottom: 70%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+  }
+
+  #food-menu.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .food-option {
+    background: #fffdf5;
+    border: 3px solid #5a4e3c;
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-family: 'DotGothic16', monospace;
+    font-size: 14px;
+    color: #5a4e3c;
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.1s ease;
+    box-shadow: 2px 2px 0px #d4c9b8;
+    white-space: nowrap;
+  }
+
+  .food-option:hover {
+    transform: translateY(-2px);
+    background: #fff8e0;
+  }
+
+  .food-option:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 #d4c9b8;
+  }
+
+  /* Pop text */
+  .pop-text {
+    position: absolute;
+    font-family: 'DotGothic16', monospace;
+    font-size: 20px;
+    color: #e06060;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 5;
+    animation: popUp 1.4s ease forwards;
+  }
+
+  @keyframes popUp {
+    0% { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.5); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(-10px) scale(1.1); }
+    30% { transform: translateX(-50%) translateY(-16px) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-50px) scale(0.8); }
+  }
+
+  /* Background sparkles */
+  .sparkle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .sparkle-dot {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: #b8a88a;
+    border-radius: 1px;
+    image-rendering: pixelated;
+    animation: sparkleFade 0.5s ease forwards;
+  }
+
+  @keyframes sparkleFade {
+    0% { opacity: 1; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
+  }
+
+  /* Status bar */
+  #status {
+    position: absolute;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 13px;
+    color: #b8a88a;
+    letter-spacing: 0.5px;
+  }
+
+  /* Zzz for sleeping */
+  .zzz {
+    position: absolute;
+    font-family: 'DotGothic16', monospace;
+    color: #8a7a6a;
+    pointer-events: none;
+    z-index: 5;
+    animation: zzzFloat 2.5s ease-in-out forwards;
+  }
+
+  @keyframes zzzFloat {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+    20% { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(25px, -50px) scale(1.2); }
+  }
+
+  /* Night overlay for sleeping */
+  #night-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(20, 20, 50, 0.25);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2s ease;
+    z-index: 0;
+  }
+
+  #night-overlay.active {
+    opacity: 1;
+  }
+
+  /* Egg wobble for hatching anticipation */
+  @keyframes eggWobble {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+  }
+
+  #bird.wobble {
+    animation: eggWobble 0.4s ease-in-out;
+  }
+</style>
+</head>
+<body>
+<div id="world">
+  <div id="night-overlay"></div>
+  <div id="status"></div>
+  <div id="creature-zone">
+    <div id="thought-bubble">배고파...</div>
+    <div id="food-menu">
+      <button class="food-option" data-food="apple">🍎 사과</button>
+      <button class="food-option" data-food="banana">🍌 바나나</button>
+      <button class="food-option" data-food="bread">🍞 빵</button>
+    </div>
+    <div id="bird"></div>
+  </div>
+</div>
+
+<script>
+const bird = document.getElementById('bird');
+const thoughtBubble = document.getElementById('thought-bubble');
+const foodMenu = document.getElementById('food-menu');
+const world = document.getElementById('world');
+const creatureZone = document.getElementById('creature-zone');
+const nightOverlay = document.getElementById('night-overlay');
+const statusEl = document.getElementById('status');
+
+// Spritesheet: 1685x2359, 5 cols x 7 rows, each frame 337x337
+// Displayed at 160x160
+const DISPLAY = 160;
+
+const ANIMS = {
+  idle:     { row: 0, frames: 2, speed: 500 },
+  eating:   { row: 1, frames: 3, speed: 250 },
+  flying:   { row: 2, frames: 3, speed: 150 },
+  hungry:   { row: 3, frames: 3, speed: 600 },
+  sleepy:   { row: 4, frames: 3, speed: 700 },
+  touch:    { row: 5, frames: 3, speed: 200 },
+  hatching: { row: 6, frames: 5, speed: 700 },
+};
+
+// --- State ---
+let hunger = 100;
+const HUNGER_DURATION = 30000;
+const HUNGER_TICK = 500;
+const HUNGER_PER_TICK = (100 / HUNGER_DURATION) * HUNGER_TICK;
+
+let gameState = 'pre-hatch';
+let currentAnim = null;
+let currentFrame = 0;
+let animTimer = null;
+let isPlayingOneShot = false;
+let foodMenuOpen = false;
+let hatched = false;
+
+let sleepTimer = null;
+let zzzTimer = null;
+let flyTimer = null;
+let touchCooldown = false;
+
+const SLEEP_DELAY = 15000;
+const FLY_MIN_DELAY = 8000;
+const FLY_MAX_DELAY = 20000;
+
+// --- Sprite animation ---
+
+function setFrame(anim, frame) {
+  const a = ANIMS[anim];
+  bird.style.backgroundPosition = `${-frame * DISPLAY}px ${-a.row * DISPLAY}px`;
+}
+
+function playLoop(animName) {
+  if (animTimer) clearInterval(animTimer);
+  currentAnim = animName;
+  currentFrame = 0;
+  const a = ANIMS[animName];
+  setFrame(animName, 0);
+  animTimer = setInterval(() => {
+    currentFrame = (currentFrame + 1) % a.frames;
+    setFrame(animName, currentFrame);
+  }, a.speed);
+}
+
+function playOnce(animName, callback) {
+  if (animTimer) clearInterval(animTimer);
+  isPlayingOneShot = true;
+  currentAnim = animName;
+  currentFrame = 0;
+  const a = ANIMS[animName];
+  setFrame(animName, 0);
+  let frame = 0;
+  animTimer = setInterval(() => {
+    frame++;
+    if (frame >= a.frames) {
+      clearInterval(animTimer);
+      animTimer = null;
+      isPlayingOneShot = false;
+      if (callback) callback();
+      return;
+    }
+    setFrame(animName, frame);
+  }, a.speed);
+}
+
+function playNTimes(animName, n, callback) {
+  let count = 0;
+  function next() {
+    count++;
+    if (count >= n) { if (callback) callback(); return; }
+    playOnce(animName, next);
+  }
+  playOnce(animName, next);
+}
+
+// --- State machine ---
+
+function enterState(state) {
+  const prev = gameState;
+  gameState = state;
+
+  // Clean up previous state
+  if (prev === 'sleepy') {
+    nightOverlay.classList.remove('active');
+    stopZzz();
+  }
+  switch (state) {
+    case 'idle':
+      playLoop('idle');
+      scheduleSleep();
+      scheduleFly();
+      break;
+    case 'hungry':
+      playLoop('hungry');
+      cancelSleep();
+      cancelFly();
+      break;
+    case 'sleepy':
+      playLoop('sleepy');
+      nightOverlay.classList.add('active');
+      startZzz();
+      cancelFly();
+      break;
+    case 'flying':
+      cancelSleep();
+      doFly();
+      break;
+    case 'eating':
+      cancelSleep();
+      cancelFly();
+      break;
+    case 'touch':
+      cancelSleep();
+      break;
+  }
+}
+
+function decideDefaultState() {
+  if (hunger < 40) {
+    enterState('hungry');
+  } else {
+    enterState('idle');
+  }
+}
+
+// --- Sleep ---
+
+function scheduleSleep() {
+  cancelSleep();
+  sleepTimer = setTimeout(() => {
+    if (gameState === 'idle' && !isPlayingOneShot && hunger >= 40) {
+      enterState('sleepy');
+    }
+  }, SLEEP_DELAY);
+}
+
+function cancelSleep() {
+  if (sleepTimer) { clearTimeout(sleepTimer); sleepTimer = null; }
+}
+
+function startZzz() {
+  stopZzz();
+  spawnZzz();
+  zzzTimer = setInterval(spawnZzz, 2200);
+}
+
+function stopZzz() {
+  if (zzzTimer) { clearInterval(zzzTimer); zzzTimer = null; }
+  creatureZone.querySelectorAll('.zzz').forEach(el => el.remove());
+}
+
+function spawnZzz() {
+  const z = document.createElement('div');
+  z.className = 'zzz';
+  z.textContent = 'Z';
+  z.style.fontSize = (16 + Math.random() * 8) + 'px';
+  z.style.top = '10px';
+  z.style.right = '-5px';
+  creatureZone.appendChild(z);
+  setTimeout(() => z.remove(), 2500);
+}
+
+function wakeUp() {
+  if (gameState !== 'sleepy') return;
+  gameState = 'touch';
+  playOnce('touch', decideDefaultState);
+}
+
+// --- Flying ---
+
+function scheduleFly() {
+  cancelFly();
+  const delay = FLY_MIN_DELAY + Math.random() * (FLY_MAX_DELAY - FLY_MIN_DELAY);
+  flyTimer = setTimeout(() => {
+    if (gameState === 'idle' && !isPlayingOneShot && hunger >= 40) {
+      enterState('flying');
+    }
+  }, delay);
+}
+
+function cancelFly() {
+  if (flyTimer) { clearTimeout(flyTimer); flyTimer = null; }
+}
+
+function doFly() {
+  playLoop('flying');
+
+  const dx = (Math.random() - 0.5) * 180;
+  const dy = -(40 + Math.random() * 60);
+
+  creatureZone.style.transition = 'transform 1.5s ease-in-out';
+  creatureZone.style.transform = `translate(${dx}px, ${dy}px)`;
+
+  setTimeout(() => {
+    creatureZone.style.transform = 'translate(0, 0)';
+    setTimeout(() => {
+      creatureZone.style.transition = '';
+      decideDefaultState();
+    }, 1500);
+  }, 1800);
+}
+
+// --- Hunger ---
+
+function updateStatus() {
+  if (!hatched) return;
+  statusEl.textContent = `hunger ${Math.round(hunger)}%`;
+}
+
+function updateThought() {
+  if (!hatched) return;
+  if (hunger < 40 && gameState !== 'eating') {
+    thoughtBubble.classList.add('visible');
+  } else {
+    thoughtBubble.classList.remove('visible');
+    closeFoodMenu();
+  }
+}
+
+setInterval(() => {
+  if (!hatched || hunger <= 0) return;
+  const wasOk = hunger >= 40;
+  hunger = Math.max(0, hunger - HUNGER_PER_TICK);
+  updateStatus();
+  updateThought();
+
+  if (wasOk && hunger < 40 && (gameState === 'idle' || gameState === 'sleepy')) {
+    if (gameState === 'sleepy') {
+      nightOverlay.classList.remove('active');
+      stopZzz();
+    }
+    enterState('hungry');
+  }
+
+}, HUNGER_TICK);
+
+// --- Food ---
+
+function openFoodMenu() {
+  foodMenuOpen = true;
+  foodMenu.classList.add('visible');
+  thoughtBubble.classList.remove('visible');
+}
+
+function closeFoodMenu() {
+  foodMenuOpen = false;
+  foodMenu.classList.remove('visible');
+}
+
+function feedBird() {
+  closeFoodMenu();
+  hunger = 100;
+  gameState = 'eating';
+  cancelSleep();
+  cancelFly();
+
+  playNTimes('eating', 2, () => {
+    showPop('맛있어!');
+    updateStatus();
+    updateThought();
+    decideDefaultState();
+  });
+}
+
+function showPop(text) {
+  const el = document.createElement('div');
+  el.className = 'pop-text';
+  el.textContent = text;
+  el.style.left = '50%';
+  el.style.bottom = '100%';
+  creatureZone.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+}
+
+// --- Interactions ---
+
+function recordInteraction() {
+  if (gameState === 'idle') scheduleSleep();
+}
+
+// Press (mousedown) -> touch reaction or interaction
+bird.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  if (!hatched) return;
+  recordInteraction();
+
+  if (gameState === 'sleepy') { wakeUp(); return; }
+  if (isPlayingOneShot || gameState === 'flying') return;
+
+  if (hunger < 40 || foodMenuOpen) {
+    if (foodMenuOpen) closeFoodMenu();
+    else openFoodMenu();
+  } else {
+    // Touch reaction, then maybe fly
+    gameState = 'touch';
+    playOnce('touch', () => {
+      if (Math.random() < 0.4) {
+        enterState('flying');
+      } else {
+        decideDefaultState();
+      }
+    });
+  }
+});
+
+// Prevent click from double-firing after mousedown
+bird.addEventListener('click', (e) => {
+  e.stopPropagation();
+});
+
+document.querySelectorAll('.food-option').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isPlayingOneShot) return;
+    recordInteraction();
+    feedBird();
+  });
+});
+
+// Background sparkles
+world.addEventListener('click', (e) => {
+  if (e.target.closest('#creature-zone')) return;
+  createSparkle(e.clientX, e.clientY);
+});
+
+function createSparkle(x, y) {
+  const c = document.createElement('div');
+  c.className = 'sparkle';
+  c.style.left = x + 'px';
+  c.style.top = y + 'px';
+  const n = 5 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'sparkle-dot';
+    const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.5;
+    const dist = 12 + Math.random() * 18;
+    dot.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    dot.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+    dot.style.animationDelay = (Math.random() * 0.1) + 's';
+    const colors = ['#b8a88a', '#c9b99a', '#a8987a', '#d4c4a4'];
+    dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.appendChild(dot);
+  }
+  world.appendChild(c);
+  setTimeout(() => c.remove(), 600);
+}
+
+// --- Hatching sequence ---
+
+function startHatching() {
+  gameState = 'pre-hatch';
+  statusEl.textContent = '...?';
+
+  // Show egg (first hatching frame)
+  setFrame('hatching', 0);
+
+  // Wobble the egg a few times, then hatch
+  let wobbles = 0;
+  const maxWobbles = 3;
+
+  function wobble() {
+    bird.classList.add('wobble');
+    bird.addEventListener('animationend', function handler() {
+      bird.removeEventListener('animationend', handler);
+      bird.classList.remove('wobble');
+      wobbles++;
+      if (wobbles < maxWobbles) {
+        setTimeout(wobble, 800 + Math.random() * 400);
+      } else {
+        setTimeout(hatch, 500);
+      }
+    });
+  }
+
+  setTimeout(wobble, 1000);
+
+  function hatch() {
+    gameState = 'hatching';
+    playOnce('hatching', () => {
+      hatched = true;
+      showPop('안녕!');
+      updateStatus();
+      decideDefaultState();
+    });
+  }
+}
+
+// --- Init ---
+startHatching();
+</script>
+</body>
+</html>
