@@ -1,0 +1,10 @@
+[project]
+name = "sora-spritesheet"
+version = "0.1.0"
+description = "Generate animated sprite sheets from pixel art using OpenAI Sora"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.51.0",
+    "python-dotenv>=1.0.0",
+    "Pillow>=10.0.0",
+]

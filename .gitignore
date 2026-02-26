@@ -1,3 +1,5 @@
 .DS_Store
 spritesheet_maker
 sprites1
+.env
+output
