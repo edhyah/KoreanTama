@@ -37,10 +37,10 @@ PROMPT_PRESETS: dict[str, str] = {
         "Pixel art style preserved exactly."
     ),
     "idle": (
-        "Animate this pixel art bird character with a visible breathing animation. "
-        "The bird's chest and belly visibly expand and contract in a slow, rhythmic "
-        "breathing motion. The body gently puffs up as it inhales, then deflates slightly "
-        "as it exhales. Feathers subtly ruffle with each breath. "
+        "Animate this pixel art bird character with a breathing idle animation. "
+        "The bird's chest visibly expands and contracts in a steady breathing rhythm. "
+        "Its body gently bobs up and down in a smooth looping cycle. "
+        "Small feather adjustments as it settles. "
         "Pure white #FFFFFF background. Flat 2D side view, perfectly orthographic. "
         "No rotation, no zoom, no camera movement. The character stays the exact same "
         "size and scale throughout. No shadows, no gradients, no environmental elements. "

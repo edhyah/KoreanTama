@@ -13,7 +13,7 @@
     width: 100vw;
     height: 100dvh;
     overflow: hidden;
-    background: #ffffff;
+    background: #fdfdfd;
     font-family: 'DotGothic16', monospace;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -39,10 +39,10 @@
     height: 160px;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    background-image: url('sprites2/spritesheet_edit.png');
+    background-image: url('sora/spritesheet.png');
     background-repeat: no-repeat;
-    /* 5 cols * 160 = 800, 7 rows * 160 = 1120 */
-    background-size: 800px 1120px;
+    /* 12 cols * 160 = 1920, 6 rows * 160 = 960 */
+    background-size: 1920px 960px;
     background-position: 0 0;
     cursor: pointer;
     position: relative;
@@ -185,37 +185,6 @@
     letter-spacing: 0.5px;
   }
 
-  /* Zzz for sleeping */
-  .zzz {
-    position: absolute;
-    font-family: 'DotGothic16', monospace;
-    color: #8a7a6a;
-    pointer-events: none;
-    z-index: 5;
-    animation: zzzFloat 2.5s ease-in-out forwards;
-  }
-
-  @keyframes zzzFloat {
-    0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
-    20% { opacity: 0.8; }
-    100% { opacity: 0; transform: translate(25px, -50px) scale(1.2); }
-  }
-
-  /* Night overlay for sleeping */
-  #night-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(20, 20, 50, 0.25);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 2s ease;
-    z-index: 0;
-  }
-
-  #night-overlay.active {
-    opacity: 1;
-  }
-
   /* Egg wobble for hatching anticipation */
   @keyframes eggWobble {
     0%, 100% { transform: rotate(0deg); }
@@ -230,7 +199,6 @@
 </head>
 <body>
 <div id="world">
-  <div id="night-overlay"></div>
   <div id="status"></div>
   <div id="creature-zone">
     <div id="thought-bubble">배고파...</div>
@@ -249,21 +217,19 @@ const thoughtBubble = document.getElementById('thought-bubble');
 const foodMenu = document.getElementById('food-menu');
 const world = document.getElementById('world');
 const creatureZone = document.getElementById('creature-zone');
-const nightOverlay = document.getElementById('night-overlay');
 const statusEl = document.getElementById('status');
 
-// Spritesheet: 1685x2359, 5 cols x 7 rows, each frame 337x337
+// Spritesheet: 1536x768, 12 cols x 6 rows, each frame 128x128
 // Displayed at 160x160
 const DISPLAY = 160;
 
 const ANIMS = {
-  idle:     { row: 0, frames: 2, speed: 500 },
-  eating:   { row: 1, frames: 3, speed: 250 },
-  flying:   { row: 2, frames: 3, speed: 150 },
-  hungry:   { row: 3, frames: 3, speed: 600 },
-  sleepy:   { row: 4, frames: 3, speed: 700 },
-  touch:    { row: 5, frames: 3, speed: 200 },
-  hatching: { row: 6, frames: 5, speed: 700 },
+  eating:   { row: 0, frames: 12, speed: 150 },
+  flying:   { row: 1, frames: 6, speed: 150 },
+  hatching: { row: 2, frames: 7, speed: 700 },
+  idle:     { row: 3, frames: 4, speed: 500 },
+  pecking:  { row: 4, frames: 2, speed: 800 },
+  walking:  { row: 5, frames: 4, speed: 200 },
 };
 
 // --- State ---
@@ -280,14 +246,13 @@ let isPlayingOneShot = false;
 let foodMenuOpen = false;
 let hatched = false;
 
-let sleepTimer = null;
-let zzzTimer = null;
 let flyTimer = null;
-let touchCooldown = false;
+let walkTimer = null;
 
-const SLEEP_DELAY = 15000;
 const FLY_MIN_DELAY = 8000;
 const FLY_MAX_DELAY = 20000;
+const WALK_MIN_DELAY = 5000;
+const WALK_MAX_DELAY = 12000;
 
 // --- Sprite animation ---
 
@@ -342,41 +307,28 @@ function playNTimes(animName, n, callback) {
 // --- State machine ---
 
 function enterState(state) {
-  const prev = gameState;
   gameState = state;
 
-  // Clean up previous state
-  if (prev === 'sleepy') {
-    nightOverlay.classList.remove('active');
-    stopZzz();
-  }
   switch (state) {
     case 'idle':
       playLoop('idle');
-      scheduleSleep();
       scheduleFly();
+      scheduleWalk();
       break;
     case 'hungry':
-      playLoop('hungry');
-      cancelSleep();
+      playLoop('pecking');
       cancelFly();
-      break;
-    case 'sleepy':
-      playLoop('sleepy');
-      nightOverlay.classList.add('active');
-      startZzz();
-      cancelFly();
+      cancelWalk();
       break;
     case 'flying':
-      cancelSleep();
       doFly();
       break;
-    case 'eating':
-      cancelSleep();
-      cancelFly();
+    case 'walking':
+      doWalk();
       break;
-    case 'touch':
-      cancelSleep();
+    case 'eating':
+      cancelFly();
+      cancelWalk();
       break;
   }
 }
@@ -387,49 +339,6 @@ function decideDefaultState() {
   } else {
     enterState('idle');
   }
-}
-
-// --- Sleep ---
-
-function scheduleSleep() {
-  cancelSleep();
-  sleepTimer = setTimeout(() => {
-    if (gameState === 'idle' && !isPlayingOneShot && hunger >= 40) {
-      enterState('sleepy');
-    }
-  }, SLEEP_DELAY);
-}
-
-function cancelSleep() {
-  if (sleepTimer) { clearTimeout(sleepTimer); sleepTimer = null; }
-}
-
-function startZzz() {
-  stopZzz();
-  spawnZzz();
-  zzzTimer = setInterval(spawnZzz, 2200);
-}
-
-function stopZzz() {
-  if (zzzTimer) { clearInterval(zzzTimer); zzzTimer = null; }
-  creatureZone.querySelectorAll('.zzz').forEach(el => el.remove());
-}
-
-function spawnZzz() {
-  const z = document.createElement('div');
-  z.className = 'zzz';
-  z.textContent = 'Z';
-  z.style.fontSize = (16 + Math.random() * 8) + 'px';
-  z.style.top = '10px';
-  z.style.right = '-5px';
-  creatureZone.appendChild(z);
-  setTimeout(() => z.remove(), 2500);
-}
-
-function wakeUp() {
-  if (gameState !== 'sleepy') return;
-  gameState = 'touch';
-  playOnce('touch', decideDefaultState);
 }
 
 // --- Flying ---
@@ -449,21 +358,74 @@ function cancelFly() {
 }
 
 function doFly() {
+  cancelWalk();
   playLoop('flying');
 
   const dx = (Math.random() - 0.5) * 180;
   const dy = -(40 + Math.random() * 60);
 
+  // Flip to face flying direction
+  bird.style.transform = dx > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+
   creatureZone.style.transition = 'transform 1.5s ease-in-out';
   creatureZone.style.transform = `translate(${dx}px, ${dy}px)`;
 
   setTimeout(() => {
+    // Flip to face return direction
+    bird.style.transform = dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
     creatureZone.style.transform = 'translate(0, 0)';
     setTimeout(() => {
       creatureZone.style.transition = '';
+      bird.style.transform = 'scaleX(1)';  // Reset to default
       decideDefaultState();
     }, 1500);
   }, 1800);
+}
+
+// --- Walking ---
+
+function scheduleWalk() {
+  cancelWalk();
+  const delay = WALK_MIN_DELAY + Math.random() * (WALK_MAX_DELAY - WALK_MIN_DELAY);
+  walkTimer = setTimeout(() => {
+    if (gameState === 'idle' && !isPlayingOneShot && hunger >= 40) {
+      // Randomly choose between flying and walking
+      if (Math.random() < 0.5) {
+        enterState('walking');
+      } else {
+        enterState('flying');
+      }
+    }
+  }, delay);
+}
+
+function cancelWalk() {
+  if (walkTimer) { clearTimeout(walkTimer); walkTimer = null; }
+}
+
+function doWalk() {
+  cancelFly();
+  playLoop('walking');
+
+  // Walk horizontally (left or right)
+  const dx = (Math.random() < 0.5 ? -1 : 1) * (60 + Math.random() * 80);
+
+  // Flip bird to face walking direction (sprite faces left by default)
+  bird.style.transform = dx > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+
+  creatureZone.style.transition = 'transform 1.2s linear';
+  creatureZone.style.transform = `translate(${dx}px, 0)`;
+
+  setTimeout(() => {
+    // Flip to face return direction (opposite of initial)
+    bird.style.transform = dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+    creatureZone.style.transform = 'translate(0, 0)';
+    setTimeout(() => {
+      creatureZone.style.transition = '';
+      bird.style.transform = 'scaleX(1)';  // Reset to default
+      decideDefaultState();
+    }, 1200);
+  }, 1400);
 }
 
 // --- Hunger ---
@@ -490,11 +452,7 @@ setInterval(() => {
   updateStatus();
   updateThought();
 
-  if (wasOk && hunger < 40 && (gameState === 'idle' || gameState === 'sleepy')) {
-    if (gameState === 'sleepy') {
-      nightOverlay.classList.remove('active');
-      stopZzz();
-    }
+  if (wasOk && hunger < 40 && gameState === 'idle') {
     enterState('hungry');
   }
 
@@ -517,10 +475,10 @@ function feedBird() {
   closeFoodMenu();
   hunger = 100;
   gameState = 'eating';
-  cancelSleep();
   cancelFly();
+  cancelWalk();
 
-  playNTimes('eating', 2, () => {
+  playOnce('eating', () => {
     showPop('맛있어!');
     updateStatus();
     updateThought();
@@ -540,32 +498,18 @@ function showPop(text) {
 
 // --- Interactions ---
 
-function recordInteraction() {
-  if (gameState === 'idle') scheduleSleep();
-}
-
-// Press (mousedown) -> touch reaction or interaction
+// Press (mousedown) -> fly or open food menu
 bird.addEventListener('mousedown', (e) => {
   e.preventDefault();
   if (!hatched) return;
-  recordInteraction();
-
-  if (gameState === 'sleepy') { wakeUp(); return; }
-  if (isPlayingOneShot || gameState === 'flying') return;
+  if (isPlayingOneShot || gameState === 'flying' || gameState === 'walking') return;
 
   if (hunger < 40 || foodMenuOpen) {
     if (foodMenuOpen) closeFoodMenu();
     else openFoodMenu();
   } else {
-    // Touch reaction, then maybe fly
-    gameState = 'touch';
-    playOnce('touch', () => {
-      if (Math.random() < 0.4) {
-        enterState('flying');
-      } else {
-        decideDefaultState();
-      }
-    });
+    // Click triggers flying directly
+    enterState('flying');
   }
 });
 
@@ -578,7 +522,6 @@ document.querySelectorAll('.food-option').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (isPlayingOneShot) return;
-    recordInteraction();
     feedBird();
   });
 });
