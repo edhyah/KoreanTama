@@ -221,6 +221,13 @@
 
   #hud-streak { white-space: nowrap; }
   #hud-progress { white-space: nowrap; letter-spacing: 2px; }
+  #hud-debug {
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+  }
+  #hud-debug:hover { opacity: 1; }
 
   /* Status bar */
   #status {
@@ -261,7 +268,7 @@
     animation: progressFlash 0.6s ease;
   }
 
-  /* Debug reset modal */
+  /* Debug menu modal */
   #debug-modal {
     display: none;
     position: fixed;
@@ -277,32 +284,63 @@
     font-size: 13px;
     color: #5a4e3c;
     box-shadow: 2px 2px 0px #d4c9b8;
+    min-width: 220px;
   }
   #debug-modal.visible { display: block; }
+  #debug-modal h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: normal;
+  }
+  #debug-modal .debug-section {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #d4c9b8;
+  }
+  #debug-modal .debug-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 8px;
+  }
+  #debug-modal .debug-label {
+    font-size: 11px;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
   #debug-modal button {
     background: #fffdf5;
     border: 2px solid #5a4e3c;
     border-radius: 8px;
-    padding: 6px 16px;
-    margin: 8px 4px 0;
+    padding: 6px 12px;
+    margin: 4px 2px;
     font-family: 'DotGothic16', monospace;
-    font-size: 13px;
+    font-size: 12px;
     color: #5a4e3c;
     cursor: pointer;
   }
   #debug-modal button:hover { background: #fff8e0; }
+  #debug-modal button.active { background: #e8e0d0; }
+  #debug-modal .level-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+  #debug-modal .level-buttons button { padding: 4px 8px; font-size: 11px; }
 </style>
 </head>
 <body>
 <div id="debug-modal">
-  데이터 초기화?<br>
-  <button id="debug-yes">■ 네</button>
-  <button id="debug-no">□ 아니요</button>
+  <h3>Debug Menu</h3>
+  <div class="debug-section">
+    <div class="debug-label">Set Progress Level</div>
+    <div class="level-buttons" id="level-buttons"></div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Data</div>
+    <button id="debug-reset">Reset All Data</button>
+  </div>
+  <button id="debug-close">Close</button>
 </div>
 <div id="world">
   <div id="hud">
-    <span id="hud-streak">■ 0일째</span>
+    <span id="hud-streak">Day 0</span>
     <span id="hud-progress"></span>
+    <span id="hud-debug">*</span>
   </div>
   <div id="status"></div>
   <div id="creature-zone">
@@ -718,7 +756,7 @@ function updateHUD() {
   const streakEl = document.getElementById('hud-streak');
   const progressEl = document.getElementById('hud-progress');
   if (!streakEl || !progressEl) return;
-  streakEl.textContent = '■ ' + session.currentStreak + '일째';
+  streakEl.textContent = 'Day ' + session.currentStreak;
   const done = Math.min(session.dailyCorrectCount, session.dailyGoal);
   const remaining = session.dailyGoal - done;
   progressEl.textContent = '■'.repeat(done) + '□'.repeat(remaining);
@@ -1139,35 +1177,72 @@ function startHatching() {
   }
 }
 
-// --- Debug cache clear (long-press streak counter) ---
+// --- Debug menu ---
 (function() {
-  const streakEl = document.getElementById('hud-streak');
+  const debugBtn = document.getElementById('hud-debug');
   const modal = document.getElementById('debug-modal');
-  let pressTimer = null;
+  const levelBtnsContainer = document.getElementById('level-buttons');
 
-  function startPress(e) {
-    e.preventDefault();
-    pressTimer = setTimeout(() => {
-      modal.classList.add('visible');
-    }, 1500);
-  }
-  function cancelPress() {
-    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-  }
+  // Build level buttons based on category unlock thresholds
+  const levels = [
+    { label: '0', value: 0 },
+    ...CATEGORIES.filter(c => c.unlockAt > 0).map(c => ({ label: c.name, value: c.unlockAt }))
+  ];
 
-  streakEl.addEventListener('mousedown', startPress);
-  streakEl.addEventListener('touchstart', startPress);
-  streakEl.addEventListener('mouseup', cancelPress);
-  streakEl.addEventListener('mouseleave', cancelPress);
-  streakEl.addEventListener('touchend', cancelPress);
-  streakEl.addEventListener('touchcancel', cancelPress);
-
-  document.getElementById('debug-yes').addEventListener('click', () => {
-    localStorage.removeItem('koreanTamaStats');
-    localStorage.removeItem('koreanTamaSession');
-    location.reload();
+  levels.forEach(level => {
+    const btn = document.createElement('button');
+    btn.textContent = level.label;
+    btn.title = 'Set progress to ' + level.value;
+    btn.addEventListener('click', () => {
+      setProgressLevel(level.value);
+    });
+    levelBtnsContainer.appendChild(btn);
   });
-  document.getElementById('debug-no').addEventListener('click', () => {
+
+  function setProgressLevel(targetTotal) {
+    // Distribute correctCount across words to reach target total
+    const allWords = WORDS;
+    let remaining = targetTotal;
+
+    // Reset all stats first
+    wordStats = {};
+
+    // Distribute evenly across unlocked words up to target
+    for (let i = 0; i < allWords.length && remaining > 0; i++) {
+      const count = Math.min(remaining, 5); // max 5 per word for even distribution
+      wordStats[allWords[i].korean] = {
+        correctCount: count,
+        correctStreak: count,
+        lastSeen: Date.now(),
+        interval: 30000
+      };
+      remaining -= count;
+    }
+
+    saveStats();
+    updateHUD();
+    modal.classList.remove('visible');
+
+    // Show feedback
+    const total = getTotalCorrect();
+    const unlocked = getUnlockedCategories();
+    console.log('Progress set to ' + total + ', unlocked: ' + unlocked.map(c => c.name).join(', '));
+  }
+
+  debugBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    modal.classList.add('visible');
+  });
+
+  document.getElementById('debug-reset').addEventListener('click', () => {
+    if (confirm('Reset all progress data?')) {
+      localStorage.removeItem('koreanTamaStats');
+      localStorage.removeItem('koreanTamaSession');
+      location.reload();
+    }
+  });
+
+  document.getElementById('debug-close').addEventListener('click', () => {
     modal.classList.remove('visible');
   });
 })();
