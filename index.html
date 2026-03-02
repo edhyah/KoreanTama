@@ -776,19 +776,24 @@ function startHatching() {
     });
   }
 
-  // Require a tap so the browser unlocks audio before 안녕 is spoken
+  // Full-screen tap overlay to unlock audio and start hatching
   function waitForTap() {
     statusEl.textContent = 'tap the egg!';
-    function onTap() {
-      bird.removeEventListener('mousedown', onTap);
-      bird.removeEventListener('touchstart', onTap);
-      // Speak 안녕 directly inside the gesture so the browser allows it
-      speak('안녕!');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:pointer;';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function onTap() {
+      overlay.remove();
+      // Speak 안녕 directly in click handler — no cancel() first time
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance('안녕!');
+        u.lang = 'ko-KR';
+        u.rate = 0.85;
+        speechSynthesis.speak(u);
+      }
       statusEl.textContent = '...?';
       setTimeout(wobble, 400);
-    }
-    bird.addEventListener('mousedown', onTap);
-    bird.addEventListener('touchstart', onTap);
+    });
   }
 
   // Show egg, then wait for user interaction
