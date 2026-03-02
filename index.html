@@ -784,11 +784,11 @@ function startHatching() {
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function onTap() {
       overlay.remove();
-      // Speak 안녕 directly in click handler — no cancel() first time
+      // Speak a brief dot to unlock speechSynthesis in this gesture
       if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance('안녕!');
+        const u = new SpeechSynthesisUtterance('.');
         u.lang = 'ko-KR';
-        u.rate = 0.85;
+        u.volume = 0.01;
         speechSynthesis.speak(u);
       }
       statusEl.textContent = '...?';
@@ -803,7 +803,7 @@ function startHatching() {
     gameState = 'hatching';
     playOnce('hatching', () => {
       hatched = true;
-      showPop('안녕!', false);
+      showPop('안녕!', true);
       updateStatus();
       decideDefaultState();
     });
