@@ -71,6 +71,11 @@ Modify the food button click handler:
 ## Files Changed
 - `index.html` — all changes in this single file (CSS + JS)
 
+### Step 10: Debug Reset Button
+- Small muted "RESET" text in the bottom-left corner, low opacity, same DotGothic16 font
+- On tap, show a pixel-art styled confirm dialog: "Reset all progress? This cannot be undone." with [Yes] / [No]
+- On confirm, clear `koreanTamaStats` from localStorage and reload the page (back to the egg)
+
 ## What We're NOT Doing (MVP Scope)
 - No English anywhere in the UI
 - No typing/input — selection only
