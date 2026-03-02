@@ -644,7 +644,7 @@ function handleAnswer(chosen, btn) {
         updateStatus();
         setTimeout(() => enterState('flying'), 600);
       } else {
-        showPop('맛있어!');
+        showPop('맛있어!', true);
         updateStatus();
 
         // Streak bonus: fly when 3+ in a row
@@ -681,7 +681,7 @@ function startQuiz() {
   speak(requestText);
 }
 
-function showPop(text) {
+function showPop(text, sayIt) {
   const el = document.createElement('div');
   el.className = 'pop-text';
   el.textContent = text;
@@ -689,6 +689,7 @@ function showPop(text) {
   el.style.bottom = '100%';
   creatureZone.appendChild(el);
   setTimeout(() => el.remove(), 1400);
+  if (sayIt) speak(text);
 }
 
 // --- Interactions ---
@@ -781,7 +782,7 @@ function startHatching() {
     gameState = 'hatching';
     playOnce('hatching', () => {
       hatched = true;
-      showPop('안녕!');
+      showPop('안녕!', true);
       updateStatus();
       decideDefaultState();
     });
