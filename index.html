@@ -49,6 +49,24 @@
     z-index: 2;
   }
 
+  /* Accessory overlay on bird */
+  #accessory {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 22px;
+    z-index: 3;
+    pointer-events: none;
+    display: none;
+    filter: drop-shadow(1px 1px 0px rgba(0,0,0,0.15));
+  }
+
+  #accessory.visible {
+    display: block;
+  }
+
   /* Thought bubble */
   #thought-bubble {
     position: absolute;
@@ -215,7 +233,7 @@
   <div id="creature-zone">
     <div id="thought-bubble">배고파...</div>
     <div id="food-menu"></div>
-    <div id="bird"></div>
+    <div id="bird"><div id="accessory"></div></div>
   </div>
 </div>
 
@@ -226,6 +244,7 @@ const foodMenu = document.getElementById('food-menu');
 const world = document.getElementById('world');
 const creatureZone = document.getElementById('creature-zone');
 const statusEl = document.getElementById('status');
+const accessoryEl = document.getElementById('accessory');
 
 // Spritesheet: 1536x768, 12 cols x 6 rows, each frame 128x128
 // Displayed at 160x160
@@ -242,30 +261,56 @@ const ANIMS = {
 
 // --- Word bank ---
 const WORDS = [
-  // Tier 0 — starter words
-  { korean: '사과', emoji: '🍎', tier: 0 },
-  { korean: '바나나', emoji: '🍌', tier: 0 },
-  { korean: '빵', emoji: '🍞', tier: 0 },
-  { korean: '물', emoji: '💧', tier: 0 },
-  { korean: '우유', emoji: '🥛', tier: 0 },
-  // Tier 1 — unlocks at 10 correct
-  { korean: '딸기', emoji: '🍓', tier: 1 },
-  { korean: '포도', emoji: '🍇', tier: 1 },
-  { korean: '수박', emoji: '🍉', tier: 1 },
-  { korean: '주스', emoji: '🧃', tier: 1 },
-  { korean: '쿠키', emoji: '🍪', tier: 1 },
-  // Tier 2 — unlocks at 25 correct
-  { korean: '밥', emoji: '🍚', tier: 2 },
-  { korean: '케이크', emoji: '🍰', tier: 2 },
-  { korean: '사탕', emoji: '🍬', tier: 2 },
-  { korean: '아이스크림', emoji: '🍦', tier: 2 },
-  { korean: '차', emoji: '🍵', tier: 2 },
-  // Tier 3 — unlocks at 50 correct
-  { korean: '복숭아', emoji: '🍑', tier: 3 },
-  { korean: '옥수수', emoji: '🌽', tier: 3 },
-  { korean: '당근', emoji: '🥕', tier: 3 },
-  { korean: '치즈', emoji: '🧀', tier: 3 },
-  { korean: '초콜릿', emoji: '🍫', tier: 3 },
+  // Food — Tier 0 (starter words)
+  { korean: '사과', emoji: '🍎', tier: 0, category: 'food' },
+  { korean: '바나나', emoji: '🍌', tier: 0, category: 'food' },
+  { korean: '빵', emoji: '🍞', tier: 0, category: 'food' },
+  { korean: '물', emoji: '💧', tier: 0, category: 'food' },
+  { korean: '우유', emoji: '🥛', tier: 0, category: 'food' },
+  // Food — Tier 1 (unlocks at 10 correct)
+  { korean: '딸기', emoji: '🍓', tier: 1, category: 'food' },
+  { korean: '포도', emoji: '🍇', tier: 1, category: 'food' },
+  { korean: '수박', emoji: '🍉', tier: 1, category: 'food' },
+  { korean: '주스', emoji: '🧃', tier: 1, category: 'food' },
+  { korean: '쿠키', emoji: '🍪', tier: 1, category: 'food' },
+  // Food — Tier 2 (unlocks at 25 correct)
+  { korean: '밥', emoji: '🍚', tier: 2, category: 'food' },
+  { korean: '케이크', emoji: '🍰', tier: 2, category: 'food' },
+  { korean: '사탕', emoji: '🍬', tier: 2, category: 'food' },
+  { korean: '아이스크림', emoji: '🍦', tier: 2, category: 'food' },
+  { korean: '차', emoji: '🍵', tier: 2, category: 'food' },
+  // Food — Tier 3 (unlocks at 50 correct)
+  { korean: '복숭아', emoji: '🍑', tier: 3, category: 'food' },
+  { korean: '옥수수', emoji: '🌽', tier: 3, category: 'food' },
+  { korean: '당근', emoji: '🥕', tier: 3, category: 'food' },
+  { korean: '치즈', emoji: '🧀', tier: 3, category: 'food' },
+  { korean: '초콜릿', emoji: '🍫', tier: 3, category: 'food' },
+
+  // Mood (feeling → remedy emoji) — Tier 0
+  { korean: '추워', emoji: '🔥', tier: 0, category: 'mood' },
+  { korean: '더워', emoji: '🧊', tier: 0, category: 'mood' },
+  { korean: '피곤해', emoji: '🛏️', tier: 0, category: 'mood' },
+  // Mood — Tier 1
+  { korean: '심심해', emoji: '⚽', tier: 1, category: 'mood' },
+  { korean: '아파', emoji: '💊', tier: 1, category: 'mood' },
+  // Mood — Tier 2
+  { korean: '졸려', emoji: '☕', tier: 2, category: 'mood' },
+  { korean: '슬퍼', emoji: '🎵', tier: 2, category: 'mood' },
+  // Mood — Tier 3
+  { korean: '무서워', emoji: '🕯️', tier: 3, category: 'mood' },
+
+  // Accessory (item to wear) — Tier 0
+  { korean: '모자', emoji: '🎩', tier: 0, category: 'accessory' },
+  { korean: '리본', emoji: '🎀', tier: 0, category: 'accessory' },
+  { korean: '안경', emoji: '👓', tier: 0, category: 'accessory' },
+  // Accessory — Tier 1
+  { korean: '목도리', emoji: '🧣', tier: 1, category: 'accessory' },
+  { korean: '꽃', emoji: '🌸', tier: 1, category: 'accessory' },
+  // Accessory — Tier 2
+  { korean: '왕관', emoji: '👑', tier: 2, category: 'accessory' },
+  { korean: '반지', emoji: '💍', tier: 2, category: 'accessory' },
+  // Accessory — Tier 3
+  { korean: '가방', emoji: '👜', tier: 3, category: 'accessory' },
 ];
 
 const TIER_THRESHOLDS = [0, 10, 25, 50];
@@ -294,10 +339,12 @@ const WALK_MAX_DELAY = 12000;
 
 // --- Quiz state ---
 let currentQuizWord = null;
+let currentNeedCategory = null;
 let streak = 0;
 
 // Per-word stats: { correctCount, correctStreak }
 let wordStats = {};
+let currentAccessory = null;
 
 function loadStats() {
   try {
@@ -310,6 +357,32 @@ function saveStats() {
   try {
     localStorage.setItem('koreanTamaStats', JSON.stringify(wordStats));
   } catch (e) { /* ignore */ }
+}
+
+function loadAccessory() {
+  try {
+    const saved = localStorage.getItem('koreanTamaAccessory');
+    if (saved) {
+      currentAccessory = saved;
+      accessoryEl.textContent = saved;
+      accessoryEl.classList.add('visible');
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function saveAccessory() {
+  try {
+    if (currentAccessory) {
+      localStorage.setItem('koreanTamaAccessory', currentAccessory);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function setAccessory(emoji) {
+  currentAccessory = emoji;
+  accessoryEl.textContent = emoji;
+  accessoryEl.classList.add('visible');
+  saveAccessory();
 }
 
 function getStats(korean) {
@@ -336,6 +409,7 @@ function getUnlockedWords() {
 }
 
 loadStats();
+loadAccessory();
 
 // --- Sprite animation ---
 
@@ -530,6 +604,7 @@ function updateThought() {
     thoughtBubble.classList.remove('visible');
     closeFoodMenu();
     currentQuizWord = null;
+    currentNeedCategory = null;
   }
 }
 
@@ -557,10 +632,33 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 
+// --- Need category selection ---
+
+function chooseNeedCategory() {
+  const total = getTotalCorrect();
+  // Food-only until player has 5 correct answers (learn the core mechanic)
+  if (total < 5) return 'food';
+
+  const unlocked = getUnlockedWords();
+  const categories = ['food'];
+  if (unlocked.filter(w => w.category === 'mood').length >= 3) categories.push('mood');
+  if (unlocked.filter(w => w.category === 'accessory').length >= 3) categories.push('accessory');
+
+  // Weighted random: food 50%, others split remaining 50%
+  const weights = categories.map(c => c === 'food' ? 2 : 1);
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * totalWeight;
+  for (let i = 0; i < categories.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return categories[i];
+  }
+  return 'food';
+}
+
 // --- Quiz & Food ---
 
 function pickQuizWord() {
-  const unlocked = getUnlockedWords();
+  const unlocked = getUnlockedWords().filter(w => w.category === currentNeedCategory);
   // Weighted random: words with lower correctStreak are more likely
   const weights = unlocked.map(w => {
     const s = getStats(w.korean);
@@ -576,7 +674,9 @@ function pickQuizWord() {
 }
 
 function pickDistractors(correct, count) {
-  const unlocked = getUnlockedWords().filter(w => w.emoji !== correct.emoji);
+  const unlocked = getUnlockedWords().filter(
+    w => w.emoji !== correct.emoji && w.category === correct.category
+  );
   // Shuffle a copy and pick
   const shuffled = [...unlocked].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
@@ -628,15 +728,16 @@ function handleAnswer(chosen, btn) {
 
     const newTier = getUnlockedTier();
     const tierUnlocked = newTier > prevTier;
+    const category = currentQuizWord.category;
+    const quizEmoji = currentQuizWord.emoji;
 
     closeFoodMenu();
     thoughtBubble.classList.remove('visible');
     hunger = 100;
-    gameState = 'eating';
     cancelFly();
     cancelWalk();
 
-    playOnce('eating', () => {
+    function afterCorrect() {
       if (tierUnlocked) {
         // Show all new emoji that just unlocked
         const newWords = WORDS.filter(w => w.tier === newTier);
@@ -644,7 +745,14 @@ function handleAnswer(chosen, btn) {
         updateStatus();
         setTimeout(() => enterState('flying'), 600);
       } else {
-        showPop('맛있어!', true);
+        if (category === 'food') {
+          showPop('맛있어!', true);
+        } else if (category === 'mood') {
+          showPop('기분 좋아!', true);
+        } else if (category === 'accessory') {
+          setAccessory(quizEmoji);
+          showPop('예뻐!', true);
+        }
         updateStatus();
 
         // Streak bonus: fly when 3+ in a row
@@ -655,9 +763,18 @@ function handleAnswer(chosen, btn) {
           decideDefaultState();
         }
       }
-    });
+    }
+
+    if (category === 'food') {
+      gameState = 'eating';
+      playOnce('eating', afterCorrect);
+    } else {
+      // Mood and accessory: happy fly instead of eating
+      afterCorrect();
+    }
 
     currentQuizWord = null;
+    currentNeedCategory = null;
   } else {
     // Wrong — shake the button, repeat more insistently
     btn.classList.add('wrong');
@@ -674,11 +791,22 @@ function handleAnswer(chosen, btn) {
 }
 
 function startQuiz() {
+  currentNeedCategory = chooseNeedCategory();
   currentQuizWord = pickQuizWord();
-  const requestText = currentQuizWord.korean + ' 주세요!';
+
+  let requestText;
+  if (currentNeedCategory === 'mood') {
+    // Moods expressed as feelings: "추워..." (I'm cold...)
+    requestText = currentQuizWord.korean + '...';
+  } else {
+    // Food and accessories use polite request: "사과 주세요!" / "모자 주세요!"
+    requestText = currentQuizWord.korean + ' 주세요!';
+  }
+
   thoughtBubble.textContent = requestText;
   thoughtBubble.classList.add('visible');
-  speak(requestText);
+  // For moods, speak just the feeling word (avoid speaking "...")
+  speak(currentNeedCategory === 'mood' ? currentQuizWord.korean : requestText);
 }
 
 function showPop(text, sayIt) {
@@ -717,7 +845,7 @@ bird.addEventListener('click', (e) => {
 thoughtBubble.addEventListener('click', (e) => {
   e.stopPropagation();
   if (currentQuizWord) {
-    speak(thoughtBubble.textContent);
+    speak(currentNeedCategory === 'mood' ? currentQuizWord.korean : thoughtBubble.textContent);
   }
 });
 
