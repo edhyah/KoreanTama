@@ -782,12 +782,8 @@ function startHatching() {
     function onTap() {
       bird.removeEventListener('mousedown', onTap);
       bird.removeEventListener('touchstart', onTap);
-      // Unlock speechSynthesis with a silent utterance inside the gesture
-      if ('speechSynthesis' in window) {
-        const unlock = new SpeechSynthesisUtterance('');
-        unlock.volume = 0;
-        speechSynthesis.speak(unlock);
-      }
+      // Speak 안녕 directly inside the gesture so the browser allows it
+      speak('안녕!');
       statusEl.textContent = '...?';
       setTimeout(wobble, 400);
     }
@@ -802,7 +798,7 @@ function startHatching() {
     gameState = 'hatching';
     playOnce('hatching', () => {
       hatched = true;
-      showPop('안녕!', true);
+      showPop('안녕!', false);
       updateStatus();
       decideDefaultState();
     });
