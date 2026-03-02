@@ -73,6 +73,7 @@
   #thought-bubble.visible {
     opacity: 1;
     pointer-events: auto;
+    cursor: pointer;
   }
 
   #thought-bubble::after {
@@ -112,10 +113,9 @@
     background: #fffdf5;
     border: 3px solid #5a4e3c;
     border-radius: 12px;
-    padding: 8px 12px;
-    font-family: 'DotGothic16', monospace;
-    font-size: 14px;
-    color: #5a4e3c;
+    padding: 10px 14px;
+    font-size: 28px;
+    line-height: 1;
     cursor: pointer;
     transition: transform 0.1s ease, background 0.1s ease;
     box-shadow: 2px 2px 0px #d4c9b8;
@@ -130,6 +130,18 @@
   .food-option:active {
     transform: translateY(1px);
     box-shadow: 0 0 0 #d4c9b8;
+  }
+
+  .food-option.wrong {
+    animation: shake 0.4s ease;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
   }
 
   /* Pop text */
@@ -202,11 +214,7 @@
   <div id="status"></div>
   <div id="creature-zone">
     <div id="thought-bubble">배고파...</div>
-    <div id="food-menu">
-      <button class="food-option" data-food="apple">🍎 사과</button>
-      <button class="food-option" data-food="banana">🍌 바나나</button>
-      <button class="food-option" data-food="bread">🍞 빵</button>
-    </div>
+    <div id="food-menu"></div>
     <div id="bird"></div>
   </div>
 </div>
@@ -232,6 +240,36 @@ const ANIMS = {
   walking:  { row: 5, frames: 4, speed: 200 },
 };
 
+// --- Word bank ---
+const WORDS = [
+  // Tier 0 — starter words
+  { korean: '사과', emoji: '🍎', tier: 0 },
+  { korean: '바나나', emoji: '🍌', tier: 0 },
+  { korean: '빵', emoji: '🍞', tier: 0 },
+  { korean: '물', emoji: '💧', tier: 0 },
+  { korean: '우유', emoji: '🥛', tier: 0 },
+  // Tier 1 — unlocks at 10 correct
+  { korean: '딸기', emoji: '🍓', tier: 1 },
+  { korean: '포도', emoji: '🍇', tier: 1 },
+  { korean: '수박', emoji: '🍉', tier: 1 },
+  { korean: '주스', emoji: '🧃', tier: 1 },
+  { korean: '쿠키', emoji: '🍪', tier: 1 },
+  // Tier 2 — unlocks at 25 correct
+  { korean: '밥', emoji: '🍚', tier: 2 },
+  { korean: '케이크', emoji: '🍰', tier: 2 },
+  { korean: '사탕', emoji: '🍬', tier: 2 },
+  { korean: '아이스크림', emoji: '🍦', tier: 2 },
+  { korean: '차', emoji: '🍵', tier: 2 },
+  // Tier 3 — unlocks at 50 correct
+  { korean: '복숭아', emoji: '🍑', tier: 3 },
+  { korean: '옥수수', emoji: '🌽', tier: 3 },
+  { korean: '당근', emoji: '🥕', tier: 3 },
+  { korean: '치즈', emoji: '🧀', tier: 3 },
+  { korean: '초콜릿', emoji: '🍫', tier: 3 },
+];
+
+const TIER_THRESHOLDS = [0, 10, 25, 50];
+
 // --- State ---
 let hunger = 100;
 const HUNGER_DURATION = 30000;
@@ -253,6 +291,51 @@ const FLY_MIN_DELAY = 8000;
 const FLY_MAX_DELAY = 20000;
 const WALK_MIN_DELAY = 5000;
 const WALK_MAX_DELAY = 12000;
+
+// --- Quiz state ---
+let currentQuizWord = null;
+let streak = 0;
+
+// Per-word stats: { correctCount, correctStreak }
+let wordStats = {};
+
+function loadStats() {
+  try {
+    const saved = localStorage.getItem('koreanTamaStats');
+    if (saved) wordStats = JSON.parse(saved);
+  } catch (e) { /* ignore */ }
+}
+
+function saveStats() {
+  try {
+    localStorage.setItem('koreanTamaStats', JSON.stringify(wordStats));
+  } catch (e) { /* ignore */ }
+}
+
+function getStats(korean) {
+  if (!wordStats[korean]) wordStats[korean] = { correctCount: 0, correctStreak: 0 };
+  return wordStats[korean];
+}
+
+function getTotalCorrect() {
+  return Object.values(wordStats).reduce((sum, s) => sum + s.correctCount, 0);
+}
+
+function getUnlockedTier() {
+  const total = getTotalCorrect();
+  let tier = 0;
+  for (let i = 1; i < TIER_THRESHOLDS.length; i++) {
+    if (total >= TIER_THRESHOLDS[i]) tier = i;
+  }
+  return tier;
+}
+
+function getUnlockedWords() {
+  const tier = getUnlockedTier();
+  return WORDS.filter(w => w.tier <= tier);
+}
+
+loadStats();
 
 // --- Sprite animation ---
 
@@ -432,16 +515,21 @@ function doWalk() {
 
 function updateStatus() {
   if (!hatched) return;
-  statusEl.textContent = `hunger ${Math.round(hunger)}%`;
+  // Show hearts based on hunger level (no English)
+  const hearts = Math.ceil(hunger / 20);
+  statusEl.textContent = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
 }
 
 function updateThought() {
   if (!hatched) return;
   if (hunger < 40 && gameState !== 'eating') {
-    thoughtBubble.classList.add('visible');
+    if (!currentQuizWord) {
+      startQuiz();
+    }
   } else {
     thoughtBubble.classList.remove('visible');
     closeFoodMenu();
+    currentQuizWord = null;
   }
 }
 
@@ -458,32 +546,139 @@ setInterval(() => {
 
 }, HUNGER_TICK);
 
-// --- Food ---
+// --- Speech ---
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
+// --- Quiz & Food ---
+
+function pickQuizWord() {
+  const unlocked = getUnlockedWords();
+  // Weighted random: words with lower correctStreak are more likely
+  const weights = unlocked.map(w => {
+    const s = getStats(w.korean);
+    return Math.max(1, 6 - s.correctStreak);
+  });
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * totalWeight;
+  for (let i = 0; i < unlocked.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return unlocked[i];
+  }
+  return unlocked[unlocked.length - 1];
+}
+
+function pickDistractors(correct, count) {
+  const unlocked = getUnlockedWords().filter(w => w.emoji !== correct.emoji);
+  // Shuffle a copy and pick
+  const shuffled = [...unlocked].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function buildFoodMenu() {
+  foodMenu.innerHTML = '';
+  if (!currentQuizWord) return;
+
+  const distractors = pickDistractors(currentQuizWord, 2);
+  const options = [currentQuizWord, ...distractors].sort(() => Math.random() - 0.5);
+
+  options.forEach(word => {
+    const btn = document.createElement('button');
+    btn.className = 'food-option';
+    btn.textContent = word.emoji;
+    btn.dataset.emoji = word.emoji;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isPlayingOneShot) return;
+      handleAnswer(word, btn);
+    });
+    foodMenu.appendChild(btn);
+  });
+}
 
 function openFoodMenu() {
   foodMenuOpen = true;
+  buildFoodMenu();
   foodMenu.classList.add('visible');
-  thoughtBubble.classList.remove('visible');
 }
 
 function closeFoodMenu() {
   foodMenuOpen = false;
   foodMenu.classList.remove('visible');
+  foodMenu.innerHTML = '';
 }
 
-function feedBird() {
-  closeFoodMenu();
-  hunger = 100;
-  gameState = 'eating';
-  cancelFly();
-  cancelWalk();
+function handleAnswer(chosen, btn) {
+  if (chosen.emoji === currentQuizWord.emoji) {
+    // Correct!
+    const prevTier = getUnlockedTier();
 
-  playOnce('eating', () => {
-    showPop('맛있어!');
-    updateStatus();
-    updateThought();
-    decideDefaultState();
-  });
+    const stats = getStats(currentQuizWord.korean);
+    stats.correctCount++;
+    stats.correctStreak++;
+    streak++;
+    saveStats();
+
+    const newTier = getUnlockedTier();
+    const tierUnlocked = newTier > prevTier;
+
+    closeFoodMenu();
+    thoughtBubble.classList.remove('visible');
+    hunger = 100;
+    gameState = 'eating';
+    cancelFly();
+    cancelWalk();
+
+    playOnce('eating', () => {
+      if (tierUnlocked) {
+        // Show all new emoji that just unlocked
+        const newWords = WORDS.filter(w => w.tier === newTier);
+        showPop(newWords.map(w => w.emoji).join(''));
+        updateStatus();
+        setTimeout(() => enterState('flying'), 600);
+      } else {
+        showPop('맛있어!');
+        updateStatus();
+
+        // Streak bonus: fly when 3+ in a row
+        if (streak >= 3) {
+          streak = 0;
+          setTimeout(() => enterState('flying'), 600);
+        } else {
+          decideDefaultState();
+        }
+      }
+    });
+
+    currentQuizWord = null;
+  } else {
+    // Wrong — shake the button, repeat more insistently
+    btn.classList.add('wrong');
+    const stats = getStats(currentQuizWord.korean);
+    stats.correctStreak = 0;
+    saveStats();
+    streak = 0;
+
+    // Bird repeats itself (just the word, no 주세요)
+    thoughtBubble.textContent = currentQuizWord.korean + '!';
+    thoughtBubble.classList.add('visible');
+    speak(currentQuizWord.korean);
+  }
+}
+
+function startQuiz() {
+  currentQuizWord = pickQuizWord();
+  const requestText = currentQuizWord.korean + ' 주세요!';
+  thoughtBubble.textContent = requestText;
+  thoughtBubble.classList.add('visible');
+  speak(requestText);
 }
 
 function showPop(text) {
@@ -498,7 +693,7 @@ function showPop(text) {
 
 // --- Interactions ---
 
-// Press (mousedown) -> fly or open food menu
+// Click bird -> fly or open food menu
 bird.addEventListener('mousedown', (e) => {
   e.preventDefault();
   if (!hatched) return;
@@ -508,7 +703,6 @@ bird.addEventListener('mousedown', (e) => {
     if (foodMenuOpen) closeFoodMenu();
     else openFoodMenu();
   } else {
-    // Click triggers flying directly
     enterState('flying');
   }
 });
@@ -518,12 +712,12 @@ bird.addEventListener('click', (e) => {
   e.stopPropagation();
 });
 
-document.querySelectorAll('.food-option').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (isPlayingOneShot) return;
-    feedBird();
-  });
+// Tap thought bubble to hear it again
+thoughtBubble.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (currentQuizWord) {
+    speak(thoughtBubble.textContent);
+  }
 });
 
 // Background sparkles
