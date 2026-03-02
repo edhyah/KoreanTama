@@ -122,6 +122,13 @@
     white-space: nowrap;
   }
 
+  .food-option.text-option {
+    font-size: 18px;
+    font-family: 'DotGothic16', monospace;
+    color: #5a4e3c;
+    padding: 8px 12px;
+  }
+
   .food-option:hover {
     transform: translateY(-2px);
     background: #fff8e0;
@@ -185,6 +192,36 @@
     100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
   }
 
+  /* HUD — streak + daily progress */
+  #hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #5a4e3c;
+    border-bottom: 3px solid #5a4e3c;
+    background: #fffdf5;
+    z-index: 20;
+    letter-spacing: 0.5px;
+  }
+
+  #hud.goal-pulse {
+    animation: hudPulse 1.5s ease;
+  }
+
+  @keyframes hudPulse {
+    0%, 100% { text-shadow: none; }
+    50% { text-shadow: 0 0 8px #b8a88a, 0 0 16px #d4c9b8; }
+  }
+
+  #hud-streak { white-space: nowrap; }
+  #hud-progress { white-space: nowrap; letter-spacing: 2px; }
+
   /* Status bar */
   #status {
     position: absolute;
@@ -207,10 +244,66 @@
   #bird.wobble {
     animation: eggWobble 0.4s ease-in-out;
   }
+
+  /* Bird lapsed/faded state */
+  #bird.lapsed {
+    filter: saturate(0.3) brightness(0.85);
+    transition: filter 0.5s ease;
+  }
+
+  /* HUD progress bar completion flash */
+  @keyframes progressFlash {
+    0%, 100% { background: #fffdf5; }
+    50% { background: #fff8e0; }
+  }
+
+  #hud.goal-complete {
+    animation: progressFlash 0.6s ease;
+  }
+
+  /* Debug reset modal */
+  #debug-modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fffdf5;
+    border: 3px solid #5a4e3c;
+    border-radius: 12px;
+    padding: 16px 20px;
+    z-index: 100;
+    text-align: center;
+    font-size: 13px;
+    color: #5a4e3c;
+    box-shadow: 2px 2px 0px #d4c9b8;
+  }
+  #debug-modal.visible { display: block; }
+  #debug-modal button {
+    background: #fffdf5;
+    border: 2px solid #5a4e3c;
+    border-radius: 8px;
+    padding: 6px 16px;
+    margin: 8px 4px 0;
+    font-family: 'DotGothic16', monospace;
+    font-size: 13px;
+    color: #5a4e3c;
+    cursor: pointer;
+  }
+  #debug-modal button:hover { background: #fff8e0; }
 </style>
 </head>
 <body>
+<div id="debug-modal">
+  데이터 초기화?<br>
+  <button id="debug-yes">■ 네</button>
+  <button id="debug-no">□ 아니요</button>
+</div>
 <div id="world">
+  <div id="hud">
+    <span id="hud-streak">■ 0일째</span>
+    <span id="hud-progress"></span>
+  </div>
   <div id="status"></div>
   <div id="creature-zone">
     <div id="thought-bubble">배고파...</div>
@@ -240,41 +333,88 @@ const ANIMS = {
   walking:  { row: 5, frames: 4, speed: 200 },
 };
 
-// --- Word bank ---
-const WORDS = [
-  // Tier 0 — starter words
-  { korean: '사과', emoji: '🍎', tier: 0 },
-  { korean: '바나나', emoji: '🍌', tier: 0 },
-  { korean: '빵', emoji: '🍞', tier: 0 },
-  { korean: '물', emoji: '💧', tier: 0 },
-  { korean: '우유', emoji: '🥛', tier: 0 },
-  // Tier 1 — unlocks at 10 correct
-  { korean: '딸기', emoji: '🍓', tier: 1 },
-  { korean: '포도', emoji: '🍇', tier: 1 },
-  { korean: '수박', emoji: '🍉', tier: 1 },
-  { korean: '주스', emoji: '🧃', tier: 1 },
-  { korean: '쿠키', emoji: '🍪', tier: 1 },
-  // Tier 2 — unlocks at 25 correct
-  { korean: '밥', emoji: '🍚', tier: 2 },
-  { korean: '케이크', emoji: '🍰', tier: 2 },
-  { korean: '사탕', emoji: '🍬', tier: 2 },
-  { korean: '아이스크림', emoji: '🍦', tier: 2 },
-  { korean: '차', emoji: '🍵', tier: 2 },
-  // Tier 3 — unlocks at 50 correct
-  { korean: '복숭아', emoji: '🍑', tier: 3 },
-  { korean: '옥수수', emoji: '🌽', tier: 3 },
-  { korean: '당근', emoji: '🥕', tier: 3 },
-  { korean: '치즈', emoji: '🧀', tier: 3 },
-  { korean: '초콜릿', emoji: '🍫', tier: 3 },
+// --- Word bank (8 categories, ~80 words) ---
+const CATEGORIES = [
+  { id: 'food', name: '음식', unlockAt: 0, words: [
+    { korean: '사과', emoji: '🍎' }, { korean: '바나나', emoji: '🍌' },
+    { korean: '빵', emoji: '🍞' }, { korean: '물', emoji: '💧' },
+    { korean: '우유', emoji: '🥛' }, { korean: '딸기', emoji: '🍓' },
+    { korean: '포도', emoji: '🍇' }, { korean: '수박', emoji: '🍉' },
+    { korean: '주스', emoji: '🧃' }, { korean: '쿠키', emoji: '🍪' },
+    { korean: '밥', emoji: '🍚' }, { korean: '케이크', emoji: '🍰' },
+    { korean: '사탕', emoji: '🍬' }, { korean: '아이스크림', emoji: '🍦' },
+    { korean: '차', emoji: '🍵' }, { korean: '복숭아', emoji: '🍑' },
+    { korean: '옥수수', emoji: '🌽' }, { korean: '당근', emoji: '🥕' },
+    { korean: '치즈', emoji: '🧀' }, { korean: '초콜릿', emoji: '🍫' },
+  ]},
+  { id: 'animals', name: '동물', unlockAt: 15, words: [
+    { korean: '강아지', emoji: '🐕' }, { korean: '고양이', emoji: '🐱' },
+    { korean: '토끼', emoji: '🐰' }, { korean: '새', emoji: '🐦' },
+    { korean: '물고기', emoji: '🐟' }, { korean: '곰', emoji: '🐻' },
+    { korean: '원숭이', emoji: '🐵' }, { korean: '호랑이', emoji: '🐯' },
+    { korean: '코끼리', emoji: '🐘' }, { korean: '쥐', emoji: '🐭' },
+  ]},
+  { id: 'colors', name: '색깔', unlockAt: 30, words: [
+    { korean: '빨간색', emoji: '🔴' }, { korean: '파란색', emoji: '🔵' },
+    { korean: '노란색', emoji: '🟡' }, { korean: '초록색', emoji: '🟢' },
+    { korean: '하얀색', emoji: '⚪' }, { korean: '까만색', emoji: '⚫' },
+    { korean: '보라색', emoji: '🟣' }, { korean: '주황색', emoji: '🟠' },
+  ]},
+  { id: 'objects', name: '물건', unlockAt: 50, words: [
+    { korean: '집', emoji: '🏠' }, { korean: '나무', emoji: '🌳' },
+    { korean: '꽃', emoji: '🌸' }, { korean: '책', emoji: '📖' },
+    { korean: '연필', emoji: '✏️' }, { korean: '가방', emoji: '🎒' },
+    { korean: '시계', emoji: '⏰' }, { korean: '전화', emoji: '📱' },
+    { korean: '열쇠', emoji: '🔑' }, { korean: '우산', emoji: '☂️' },
+  ]},
+  { id: 'weather', name: '날씨', unlockAt: 70, words: [
+    { korean: '해', emoji: '☀️' }, { korean: '비', emoji: '🌧️' },
+    { korean: '눈', emoji: '❄️' }, { korean: '구름', emoji: '☁️' },
+    { korean: '바람', emoji: '🌬️' }, { korean: '번개', emoji: '⚡' },
+    { korean: '무지개', emoji: '🌈' }, { korean: '별', emoji: '⭐' },
+  ]},
+  { id: 'body', name: '몸', unlockAt: 90, words: [
+    { korean: '눈', emoji: '👁️' }, { korean: '코', emoji: '👃' },
+    { korean: '입', emoji: '👄' }, { korean: '귀', emoji: '👂' },
+    { korean: '손', emoji: '✋' }, { korean: '발', emoji: '🦶' },
+    { korean: '머리', emoji: '🗣️' }, { korean: '하트', emoji: '❤️' },
+  ]},
+  { id: 'numbers', name: '숫자', unlockAt: 110, words: [
+    { korean: '하나', emoji: '1️⃣' }, { korean: '둘', emoji: '2️⃣' },
+    { korean: '셋', emoji: '3️⃣' }, { korean: '넷', emoji: '4️⃣' },
+    { korean: '다섯', emoji: '5️⃣' },
+  ]},
+  { id: 'actions', name: '동작', unlockAt: 135, words: [
+    { korean: '먹다', emoji: '🍽️' }, { korean: '자다', emoji: '😴' },
+    { korean: '걷다', emoji: '🚶' }, { korean: '달리다', emoji: '🏃' },
+    { korean: '울다', emoji: '😢' }, { korean: '웃다', emoji: '😊' },
+    { korean: '노래', emoji: '🎵' }, { korean: '춤', emoji: '💃' },
+  ]},
 ];
 
-const TIER_THRESHOLDS = [0, 10, 25, 50];
+// Flatten for quick lookup — each word gets a category ref
+const WORDS = [];
+CATEGORIES.forEach(cat => {
+  cat.words.forEach(w => {
+    WORDS.push({ korean: w.korean, emoji: w.emoji, category: cat.id });
+  });
+});
+
+// Adjectives for phrase challenges (Task 9)
+const ADJECTIVES = [
+  { korean: '빨간', english: 'red' },
+  { korean: '큰', english: 'big' },
+  { korean: '작은', english: 'small' },
+  { korean: '차가운', english: 'cold' },
+  { korean: '뜨거운', english: 'hot' },
+];
 
 // --- State ---
 let hunger = 100;
-const HUNGER_DURATION = 30000;
+const HUNGER_DURATION = 90000; // 90 seconds to deplete (reconciled from 30s)
 const HUNGER_TICK = 500;
 const HUNGER_PER_TICK = (100 / HUNGER_DURATION) * HUNGER_TICK;
+let dailyGoalMet = false; // halves hunger rate after goal met
 
 let gameState = 'pre-hatch';
 let currentAnim = null;
@@ -295,9 +435,25 @@ const WALK_MAX_DELAY = 12000;
 // --- Quiz state ---
 let currentQuizWord = null;
 let streak = 0;
+let isReverseQuiz = false;
+let isPhraseQuiz = false;
+let phraseAdjective = null;
 
-// Per-word stats: { correctCount, correctStreak }
+// --- Session & streak persistence ---
 let wordStats = {};
+let session = {
+  lastPlayedDate: null,
+  currentStreak: 0,
+  bestStreak: 0,
+  dailyCorrectCount: 0,
+  dailyGoal: 10,
+  hatched: false,
+};
+let returnType = 'first-time'; // 'first-time' | 'same-day' | 'new-day' | 'lapsed'
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function loadStats() {
   try {
@@ -306,14 +462,56 @@ function loadStats() {
   } catch (e) { /* ignore */ }
 }
 
+function loadSession() {
+  try {
+    const saved = localStorage.getItem('koreanTamaSession');
+    if (saved) {
+      const s = JSON.parse(saved);
+      Object.assign(session, s);
+    }
+  } catch (e) { /* ignore */ }
+
+  const today = getTodayStr();
+  if (!session.lastPlayedDate) {
+    returnType = 'first-time';
+  } else if (session.lastPlayedDate === today) {
+    returnType = 'same-day';
+  } else {
+    // Check if yesterday
+    const last = new Date(session.lastPlayedDate + 'T00:00:00');
+    const now = new Date(today + 'T00:00:00');
+    const diffDays = Math.round((now - last) / 86400000);
+    if (diffDays === 1) {
+      returnType = 'new-day';
+      session.currentStreak++;
+      if (session.currentStreak > session.bestStreak) {
+        session.bestStreak = session.currentStreak;
+      }
+    } else {
+      returnType = 'lapsed';
+      session.currentStreak = 0;
+    }
+    session.dailyCorrectCount = 0;
+  }
+  session.lastPlayedDate = today;
+  hatched = session.hatched;
+  saveSession();
+}
+
 function saveStats() {
   try {
     localStorage.setItem('koreanTamaStats', JSON.stringify(wordStats));
   } catch (e) { /* ignore */ }
 }
 
+function saveSession() {
+  try {
+    localStorage.setItem('koreanTamaSession', JSON.stringify(session));
+  } catch (e) { /* ignore */ }
+}
+
 function getStats(korean) {
-  if (!wordStats[korean]) wordStats[korean] = { correctCount: 0, correctStreak: 0 };
+  if (!wordStats[korean]) wordStats[korean] = { correctCount: 0, correctStreak: 0, lastSeen: 0, interval: 0 };
   return wordStats[korean];
 }
 
@@ -321,21 +519,18 @@ function getTotalCorrect() {
   return Object.values(wordStats).reduce((sum, s) => sum + s.correctCount, 0);
 }
 
-function getUnlockedTier() {
+function getUnlockedCategories() {
   const total = getTotalCorrect();
-  let tier = 0;
-  for (let i = 1; i < TIER_THRESHOLDS.length; i++) {
-    if (total >= TIER_THRESHOLDS[i]) tier = i;
-  }
-  return tier;
+  return CATEGORIES.filter(c => total >= c.unlockAt);
 }
 
 function getUnlockedWords() {
-  const tier = getUnlockedTier();
-  return WORDS.filter(w => w.tier <= tier);
+  const unlocked = getUnlockedCategories();
+  return WORDS.filter(w => unlocked.some(c => c.id === w.category));
 }
 
 loadStats();
+loadSession();
 
 // --- Sprite animation ---
 
@@ -515,9 +710,18 @@ function doWalk() {
 
 function updateStatus() {
   if (!hatched) return;
-  // Show hearts based on hunger level (no English)
   const hearts = Math.ceil(hunger / 20);
   statusEl.textContent = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
+}
+
+function updateHUD() {
+  const streakEl = document.getElementById('hud-streak');
+  const progressEl = document.getElementById('hud-progress');
+  if (!streakEl || !progressEl) return;
+  streakEl.textContent = '■ ' + session.currentStreak + '일째';
+  const done = Math.min(session.dailyCorrectCount, session.dailyGoal);
+  const remaining = session.dailyGoal - done;
+  progressEl.textContent = '■'.repeat(done) + '□'.repeat(remaining);
 }
 
 function updateThought() {
@@ -528,15 +732,21 @@ function updateThought() {
     }
   } else {
     thoughtBubble.classList.remove('visible');
+    thoughtBubble.style.fontSize = '';
     closeFoodMenu();
     currentQuizWord = null;
+    isReverseQuiz = false;
+    isPhraseQuiz = false;
+    phraseAdjective = null;
   }
 }
 
 setInterval(() => {
   if (!hatched || hunger <= 0) return;
   const wasOk = hunger >= 40;
-  hunger = Math.max(0, hunger - HUNGER_PER_TICK);
+  // After daily goal met, bird is content — halve hunger depletion rate
+  const rate = dailyGoalMet ? HUNGER_PER_TICK * 0.5 : HUNGER_PER_TICK;
+  hunger = Math.max(0, hunger - rate);
   updateStatus();
   updateThought();
 
@@ -561,25 +771,54 @@ function speak(text) {
 
 function pickQuizWord() {
   const unlocked = getUnlockedWords();
-  // Weighted random: words with lower correctStreak are more likely
-  const weights = unlocked.map(w => {
+  const now = Date.now();
+
+  // Split into review-due and new words
+  const reviewDue = [];
+  const newWords = [];
+  unlocked.forEach(w => {
+    const s = getStats(w.korean);
+    if (s.correctCount === 0) {
+      newWords.push(w);
+    } else if (now - s.lastSeen > s.interval) {
+      reviewDue.push(w);
+    }
+  });
+
+  // 60% review / 40% new when both available
+  let pool;
+  if (reviewDue.length > 0 && newWords.length > 0) {
+    pool = Math.random() < 0.6 ? reviewDue : newWords;
+  } else if (reviewDue.length > 0) {
+    pool = reviewDue;
+  } else if (newWords.length > 0) {
+    pool = newWords;
+  } else {
+    pool = unlocked; // all reviewed and not yet due — pick any
+  }
+
+  // Weighted random within pool: lower correctStreak = higher weight
+  const weights = pool.map(w => {
     const s = getStats(w.korean);
     return Math.max(1, 6 - s.correctStreak);
   });
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * totalWeight;
-  for (let i = 0; i < unlocked.length; i++) {
+  for (let i = 0; i < pool.length; i++) {
     r -= weights[i];
-    if (r <= 0) return unlocked[i];
+    if (r <= 0) return pool[i];
   }
-  return unlocked[unlocked.length - 1];
+  return pool[pool.length - 1];
 }
 
 function pickDistractors(correct, count) {
   const unlocked = getUnlockedWords().filter(w => w.emoji !== correct.emoji);
-  // Shuffle a copy and pick
-  const shuffled = [...unlocked].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  // Prefer same-category distractors when possible
+  const sameCategory = unlocked.filter(w => w.category === correct.category);
+  const shuffledSame = [...sameCategory].sort(() => Math.random() - 0.5);
+  const shuffledOther = [...unlocked.filter(w => w.category !== correct.category)].sort(() => Math.random() - 0.5);
+  const pool = [...shuffledSame, ...shuffledOther];
+  return pool.slice(0, count);
 }
 
 function buildFoodMenu() {
@@ -592,7 +831,15 @@ function buildFoodMenu() {
   options.forEach(word => {
     const btn = document.createElement('button');
     btn.className = 'food-option';
-    btn.textContent = word.emoji;
+
+    if (isReverseQuiz) {
+      // Reverse mode: show Korean text instead of emoji
+      btn.classList.add('text-option');
+      btn.textContent = word.korean;
+    } else {
+      btn.textContent = word.emoji;
+    }
+
     btn.dataset.emoji = word.emoji;
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -616,18 +863,29 @@ function closeFoodMenu() {
 }
 
 function handleAnswer(chosen, btn) {
-  if (chosen.emoji === currentQuizWord.emoji) {
+  const isCorrect = chosen.emoji === currentQuizWord.emoji;
+
+  if (isCorrect) {
     // Correct!
-    const prevTier = getUnlockedTier();
+    const prevCats = getUnlockedCategories().map(c => c.id);
 
     const stats = getStats(currentQuizWord.korean);
     stats.correctCount++;
     stats.correctStreak++;
+    stats.lastSeen = Date.now();
+    stats.interval = Math.min(Math.max((stats.interval || 0) * 2 || 30000, 30000), 86400000);
     streak++;
-    saveStats();
 
-    const newTier = getUnlockedTier();
-    const tierUnlocked = newTier > prevTier;
+    // Track daily progress
+    session.dailyCorrectCount++;
+    const justMetGoal = !dailyGoalMet && session.dailyCorrectCount >= session.dailyGoal;
+    if (justMetGoal) dailyGoalMet = true;
+
+    saveStats();
+    saveSession();
+
+    const newCats = getUnlockedCategories().map(c => c.id);
+    const newlyUnlocked = CATEGORIES.find(c => newCats.includes(c.id) && !prevCats.includes(c.id));
 
     closeFoodMenu();
     thoughtBubble.classList.remove('visible');
@@ -636,16 +894,42 @@ function handleAnswer(chosen, btn) {
     cancelFly();
     cancelWalk();
 
+    // Handle lapsed bird restoration on first correct answer
+    const wasLapsed = returnType === 'lapsed';
+    if (wasLapsed) {
+      bird.classList.remove('lapsed');
+      ANIMS.idle.speed = 500;
+      returnType = 'restored';
+    }
+
     playOnce('eating', () => {
-      if (tierUnlocked) {
-        // Show all new emoji that just unlocked
-        const newWords = WORDS.filter(w => w.tier === newTier);
-        showPop(newWords.map(w => w.emoji).join(''));
+      if (wasLapsed) {
+        // Bird restored — celebration
+        showPop('다시 만나서 반가워!', true);
         updateStatus();
+        updateHUD();
+        setTimeout(() => enterState('flying'), 600);
+      } else if (newlyUnlocked) {
+        // Category unlock! Show category name + preview emoji
+        const preview = newlyUnlocked.words.slice(0, 3).map(w => w.emoji).join('');
+        showPop(newlyUnlocked.name + '! ' + preview);
+        speak(newlyUnlocked.name);
+        updateStatus();
+        updateHUD();
+        setTimeout(() => enterState('flying'), 600);
+      } else if (justMetGoal) {
+        // Daily goal met!
+        showPop('잘했어!', true);
+        updateStatus();
+        updateHUD();
+        // Pulse the streak counter
+        const hudEl = document.getElementById('hud');
+        if (hudEl) { hudEl.classList.add('goal-pulse'); setTimeout(() => hudEl.classList.remove('goal-pulse'), 1500); }
         setTimeout(() => enterState('flying'), 600);
       } else {
         showPop('맛있어!', true);
         updateStatus();
+        updateHUD();
 
         // Streak bonus: fly when 3+ in a row
         if (streak >= 3) {
@@ -658,25 +942,68 @@ function handleAnswer(chosen, btn) {
     });
 
     currentQuizWord = null;
+    isReverseQuiz = false;
+    isPhraseQuiz = false;
+    phraseAdjective = null;
+    thoughtBubble.style.fontSize = '';
   } else {
     // Wrong — shake the button, repeat more insistently
     btn.classList.add('wrong');
     const stats = getStats(currentQuizWord.korean);
     stats.correctStreak = 0;
+    stats.lastSeen = Date.now();
+    stats.interval = 30000; // reset interval on wrong
     saveStats();
     streak = 0;
 
-    // Bird repeats itself (just the word, no 주세요)
-    thoughtBubble.textContent = currentQuizWord.korean + '!';
+    // Bird repeats itself
+    if (isPhraseQuiz && phraseAdjective) {
+      const phrase = phraseAdjective.korean + ' ' + currentQuizWord.korean + '!';
+      thoughtBubble.textContent = phrase;
+      speak(phrase);
+    } else {
+      thoughtBubble.textContent = currentQuizWord.korean + '!';
+      speak(currentQuizWord.korean);
+    }
     thoughtBubble.classList.add('visible');
-    speak(currentQuizWord.korean);
   }
 }
 
 function startQuiz() {
   currentQuizWord = pickQuizWord();
+  isReverseQuiz = false;
+  isPhraseQuiz = false;
+  phraseAdjective = null;
+
+  const stats = getStats(currentQuizWord.korean);
+
+  // Phrase challenge: 20% chance if correctCount >= 5 and not an action word
+  if (stats.correctCount >= 5 && currentQuizWord.category !== 'actions' && Math.random() < 0.2) {
+    isPhraseQuiz = true;
+    phraseAdjective = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const phrase = phraseAdjective.korean + ' ' + currentQuizWord.korean + ' 주세요!';
+    thoughtBubble.textContent = phrase;
+    thoughtBubble.classList.add('visible');
+    speak(phrase);
+    return;
+  }
+
+  // Reverse quiz: 30% chance if correctCount >= 3
+  const reverseEligible = getUnlockedWords().filter(w => getStats(w.korean).correctCount >= 3);
+  if (reverseEligible.length >= 3 && stats.correctCount >= 3 && Math.random() < 0.3) {
+    isReverseQuiz = true;
+    // Show emoji in thought bubble, speak Korean word
+    thoughtBubble.textContent = currentQuizWord.emoji;
+    thoughtBubble.style.fontSize = '36px';
+    thoughtBubble.classList.add('visible');
+    speak(currentQuizWord.korean);
+    return;
+  }
+
+  // Normal quiz
   const requestText = currentQuizWord.korean + ' 주세요!';
   thoughtBubble.textContent = requestText;
+  thoughtBubble.style.fontSize = '';
   thoughtBubble.classList.add('visible');
   speak(requestText);
 }
@@ -803,6 +1130,8 @@ function startHatching() {
     gameState = 'hatching';
     playOnce('hatching', () => {
       hatched = true;
+      session.hatched = true;
+      saveSession();
       showPop('안녕!', true);
       updateStatus();
       decideDefaultState();
@@ -810,8 +1139,83 @@ function startHatching() {
   }
 }
 
+// --- Debug cache clear (long-press streak counter) ---
+(function() {
+  const streakEl = document.getElementById('hud-streak');
+  const modal = document.getElementById('debug-modal');
+  let pressTimer = null;
+
+  function startPress(e) {
+    e.preventDefault();
+    pressTimer = setTimeout(() => {
+      modal.classList.add('visible');
+    }, 1500);
+  }
+  function cancelPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  }
+
+  streakEl.addEventListener('mousedown', startPress);
+  streakEl.addEventListener('touchstart', startPress);
+  streakEl.addEventListener('mouseup', cancelPress);
+  streakEl.addEventListener('mouseleave', cancelPress);
+  streakEl.addEventListener('touchend', cancelPress);
+  streakEl.addEventListener('touchcancel', cancelPress);
+
+  document.getElementById('debug-yes').addEventListener('click', () => {
+    localStorage.removeItem('koreanTamaStats');
+    localStorage.removeItem('koreanTamaSession');
+    location.reload();
+  });
+  document.getElementById('debug-no').addEventListener('click', () => {
+    modal.classList.remove('visible');
+  });
+})();
+
+// --- Return states ---
+function handleReturnState() {
+  updateStatus();
+
+  if (returnType === 'lapsed') {
+    // Bird is faded/lonely — slower idle
+    bird.classList.add('lapsed');
+    ANIMS.idle.speed = 800; // slower idle
+    playLoop('idle');
+    scheduleFly();
+    scheduleWalk();
+    gameState = 'idle';
+    // Thought bubble after 1s
+    setTimeout(() => {
+      thoughtBubble.textContent = '...보고 싶었어';
+      thoughtBubble.classList.add('visible');
+      speak('보고 싶었어');
+    }, 1000);
+  } else if (returnType === 'new-day') {
+    // Streak continues — excited bird
+    ANIMS.idle.speed = 500; // normal speed
+    playOnce('pecking', () => {
+      showPop('좋은 아침!', true);
+      playOnce('flying', () => {
+        decideDefaultState();
+      });
+    });
+  } else {
+    // Same day or first time after hatch — just resume
+    ANIMS.idle.speed = 500;
+    decideDefaultState();
+  }
+}
+
 // --- Init ---
-startHatching();
+dailyGoalMet = session.dailyCorrectCount >= session.dailyGoal;
+updateHUD();
+
+if (hatched) {
+  // Already hatched — skip egg sequence, handle return states
+  handleReturnState();
+} else {
+  startHatching();
+}
 </script>
 </body>
 </html>
