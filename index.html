@@ -782,6 +782,12 @@ function startHatching() {
     function onTap() {
       bird.removeEventListener('mousedown', onTap);
       bird.removeEventListener('touchstart', onTap);
+      // Unlock speechSynthesis with a silent utterance inside the gesture
+      if ('speechSynthesis' in window) {
+        const unlock = new SpeechSynthesisUtterance('');
+        unlock.volume = 0;
+        speechSynthesis.speak(unlock);
+      }
       statusEl.textContent = '...?';
       setTimeout(wobble, 400);
     }
