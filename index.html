@@ -776,7 +776,21 @@ function startHatching() {
     });
   }
 
-  setTimeout(wobble, 1000);
+  // Require a tap so the browser unlocks audio before 안녕 is spoken
+  function waitForTap() {
+    statusEl.textContent = 'tap the egg!';
+    function onTap() {
+      bird.removeEventListener('mousedown', onTap);
+      bird.removeEventListener('touchstart', onTap);
+      statusEl.textContent = '...?';
+      setTimeout(wobble, 400);
+    }
+    bird.addEventListener('mousedown', onTap);
+    bird.addEventListener('touchstart', onTap);
+  }
+
+  // Show egg, then wait for user interaction
+  waitForTap();
 
   function hatch() {
     gameState = 'hatching';
