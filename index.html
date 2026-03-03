@@ -322,6 +322,15 @@
   #debug-modal button.active { background: #e8e0d0; }
   #debug-modal .level-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
   #debug-modal .level-buttons button { padding: 4px 8px; font-size: 11px; }
+  #debug-modal .stat-icons { display: flex; justify-content: center; gap: 4px; font-size: 20px; }
+  #debug-modal .stat-icon {
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.15s;
+  }
+  #debug-modal .stat-icon.filled { opacity: 1; }
+  #debug-modal .stat-icon.hover-fill { opacity: 1; }
+  #debug-modal .stat-icon.hover-unfill { opacity: 0.3; }
 </style>
 </head>
 <body>
@@ -330,6 +339,32 @@
   <div class="debug-section">
     <div class="debug-label">Set Progress Level</div>
     <div class="level-buttons" id="level-buttons"></div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Hunger</div>
+    <div class="stat-icons" id="hunger-icons">
+      <span class="stat-icon" data-value="20">♥</span>
+      <span class="stat-icon" data-value="40">♥</span>
+      <span class="stat-icon" data-value="60">♥</span>
+      <span class="stat-icon" data-value="80">♥</span>
+      <span class="stat-icon" data-value="100">♥</span>
+    </div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Happiness</div>
+    <div class="stat-icons" id="happiness-icons">
+      <span class="stat-icon" data-value="20">★</span>
+      <span class="stat-icon" data-value="40">★</span>
+      <span class="stat-icon" data-value="60">★</span>
+      <span class="stat-icon" data-value="80">★</span>
+      <span class="stat-icon" data-value="100">★</span>
+    </div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Triggers</div>
+    <button id="debug-discovery">Discovery</button>
+    <button id="debug-hunger-quiz">Hunger Quiz</button>
+    <button id="debug-bored-quiz">Bored Quiz</button>
   </div>
   <div class="debug-section">
     <div class="debug-label">Data</div>
@@ -1317,6 +1352,8 @@ function startHatching() {
   const debugBtn = document.getElementById('hud-debug');
   const modal = document.getElementById('debug-modal');
   const levelBtnsContainer = document.getElementById('level-buttons');
+  const hungerIcons = document.getElementById('hunger-icons');
+  const happinessIcons = document.getElementById('happiness-icons');
 
   // Build level buttons based on category unlock thresholds
   const levels = [
@@ -1330,8 +1367,88 @@ function startHatching() {
     btn.title = 'Set progress to ' + level.value;
     btn.addEventListener('click', () => {
       setProgressLevel(level.value);
+      modal.classList.remove('visible');
     });
     levelBtnsContainer.appendChild(btn);
+  });
+
+  // Update icon display based on current values
+  function updateDebugIcons() {
+    const hungerLevel = Math.ceil(hunger / 20);
+    const happinessLevel = Math.ceil(happiness / 20);
+    hungerIcons.querySelectorAll('.stat-icon').forEach((icon, i) => {
+      icon.classList.remove('hover-fill', 'hover-unfill');
+      icon.classList.toggle('filled', i < hungerLevel);
+    });
+    happinessIcons.querySelectorAll('.stat-icon').forEach((icon, i) => {
+      icon.classList.remove('hover-fill', 'hover-unfill');
+      icon.classList.toggle('filled', i < happinessLevel);
+    });
+  }
+
+  // Setup hover and click for stat icons
+  function setupStatIcons(container, setStat) {
+    const icons = container.querySelectorAll('.stat-icon');
+
+    icons.forEach((icon, index) => {
+      icon.addEventListener('mouseenter', () => {
+        icons.forEach((ic, i) => {
+          ic.classList.toggle('hover-fill', i <= index);
+          ic.classList.toggle('hover-unfill', i > index);
+        });
+      });
+
+      icon.addEventListener('click', () => {
+        setStat(parseInt(icon.dataset.value));
+        updateStatus();
+        if (hatched && !currentQuizWord && gameState !== 'discovering') {
+          decideDefaultState();
+          updateThought();
+        }
+        modal.classList.remove('visible');
+      });
+    });
+
+    container.addEventListener('mouseleave', () => {
+      updateDebugIcons();
+    });
+  }
+
+  setupStatIcons(hungerIcons, (val) => { hunger = val; });
+  setupStatIcons(happinessIcons, (val) => { happiness = val; });
+
+  // Trigger discovery
+  document.getElementById('debug-discovery').addEventListener('click', () => {
+    if (!hatched) return;
+    modal.classList.remove('visible');
+    closeFoodMenu();
+    currentQuizWord = null;
+    thoughtBubble.classList.remove('visible');
+    doDiscovery();
+  });
+
+  // Trigger hunger-based quiz
+  document.getElementById('debug-hunger-quiz').addEventListener('click', () => {
+    if (!hatched) return;
+    modal.classList.remove('visible');
+    hunger = 30; // Set hunger low to trigger hungry state
+    happiness = 100; // Ensure not bored
+    updateStatus();
+    enterState('hungry');
+    startQuiz(false); // bird-initiated (hungry)
+    openFoodMenu();
+  });
+
+  // Trigger boredom-based quiz
+  document.getElementById('debug-bored-quiz').addEventListener('click', () => {
+    if (!hatched) return;
+    modal.classList.remove('visible');
+    hunger = 100; // Ensure not hungry
+    happiness = 30; // Set happiness low to trigger bored state
+    updateStatus();
+    enterState('bored');
+    startQuiz(false); // bird-initiated (bored)
+    openFoodMenu();
   });
 
   function setProgressLevel(targetTotal) {
@@ -1356,7 +1473,6 @@ function startHatching() {
 
     saveStats();
     updateHUD();
-    modal.classList.remove('visible');
 
     // Show feedback
     const total = getTotalCorrect();
@@ -1366,6 +1482,7 @@ function startHatching() {
 
   debugBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    updateDebugIcons();
     modal.classList.add('visible');
   });
 
