@@ -13,7 +13,11 @@
     width: 100vw;
     height: 100dvh;
     overflow: hidden;
-    background: #fdfdfd;
+    background: #1a2a1a url('assets/background.png') no-repeat center center;
+    background-size: cover;
+    background-attachment: fixed;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
     font-family: 'DotGothic16', monospace;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -39,7 +43,7 @@
     height: 160px;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    background-image: url('sora/spritesheet.png');
+    background-image: url('assets/spritesheet.png');
     background-repeat: no-repeat;
     /* 12 cols * 160 = 1920, 6 rows * 160 = 960 */
     background-size: 1920px 960px;
@@ -332,6 +336,26 @@
   #debug-modal .stat-icon.filled { opacity: 1; }
   #debug-modal .stat-icon.hover-fill { opacity: 1; }
   #debug-modal .stat-icon.hover-unfill { opacity: 0.3; }
+
+  /* Tap prompt above egg */
+  #tap-prompt {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: -20px;
+    font-size: 30p;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 2px 2px 0 #5a4e3c;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  #tap-prompt.visible {
+    opacity: 1;
+  }
 </style>
 </head>
 <body>
@@ -382,6 +406,7 @@
   </div>
   <div id="status"></div>
   <div id="creature-zone">
+    <div id="tap-prompt">tap the egg!</div>
     <div id="thought-bubble">배고파...</div>
     <div id="food-menu"></div>
     <div id="bird"></div>
@@ -625,6 +650,7 @@ function setFrame(anim, frame) {
 
 function playLoop(animName) {
   if (animTimer) clearInterval(animTimer);
+  isPlayingOneShot = false;
   currentAnim = animName;
   currentFrame = 0;
   const a = ANIMS[animName];
@@ -885,7 +911,7 @@ function updateStatus() {
   const smileys = Math.ceil(happiness / 20);
   const heartsStr = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
   const smileysStr = '☻'.repeat(smileys) + '☺'.repeat(5 - smileys);
-  statusEl.innerHTML = heartsStr + '  <span style="font-size:21px;position:relative;top:2px">' + smileysStr + '</span>';
+  statusEl.innerHTML = '<span style="font-size:26px">' + heartsStr + '</span>  <span style="font-size:42px;position:relative;top:4px">' + smileysStr + '</span>';
 }
 
 function getLearnedWordCount() {
@@ -906,11 +932,13 @@ function updateHUD() {
 
 function updateThought() {
   if (!hatched) return;
-  // Don't interrupt active quizzes or discoveries
+  // Don't interrupt active quizzes, discoveries, eating, or hatching
   if (currentQuizWord) return;
   if (gameState === 'discovering') return;
+  if (gameState === 'eating') return;
+  if (gameState === 'hatching') return;
 
-  if (hunger < 40 && gameState !== 'eating') {
+  if (hunger < 40) {
     startQuiz(false); // bird-initiated (hungry)
   } else if (happiness < 40 && gameState === 'bored') {
     // Show bored message (only if not already showing)
@@ -1125,16 +1153,26 @@ function handleAnswer(chosen, btn) {
         if (hudEl) { hudEl.classList.add('goal-pulse'); setTimeout(() => hudEl.classList.remove('goal-pulse'), 1500); }
         setTimeout(() => enterState('flying'), 600);
       } else {
-        showPop('맛있어!', true);
+        // Show response in speech bubble
+        thoughtBubble.textContent = '맛있어!';
+        thoughtBubble.style.fontSize = '';
+        thoughtBubble.classList.add('visible');
+        speak('맛있어');
         updateStatus();
         updateHUD();
 
         // Streak bonus: fly when 3+ in a row
         if (streak >= 3) {
           streak = 0;
-          setTimeout(() => enterState('flying'), 600);
+          setTimeout(() => {
+            thoughtBubble.classList.remove('visible');
+            enterState('flying');
+          }, 600);
         } else {
-          decideDefaultState();
+          setTimeout(() => {
+            thoughtBubble.classList.remove('visible');
+            decideDefaultState();
+          }, 1200);
         }
       }
     });
@@ -1291,7 +1329,6 @@ function createSparkle(x, y) {
 
 function startHatching() {
   gameState = 'pre-hatch';
-  statusEl.textContent = '...?';
 
   // Show egg (first hatching frame)
   setFrame('hatching', 0);
@@ -1316,12 +1353,14 @@ function startHatching() {
 
   // Full-screen tap overlay to unlock audio and start hatching
   function waitForTap() {
-    statusEl.textContent = 'tap the egg!';
+    const tapPrompt = document.getElementById('tap-prompt');
+    tapPrompt.classList.add('visible');
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:pointer;';
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function onTap() {
       overlay.remove();
+      tapPrompt.classList.remove('visible');
       // Speak a brief dot to unlock speechSynthesis in this gesture
       if ('speechSynthesis' in window) {
         const u = new SpeechSynthesisUtterance('.');
@@ -1329,7 +1368,6 @@ function startHatching() {
         u.volume = 0.01;
         speechSynthesis.speak(u);
       }
-      statusEl.textContent = '...?';
       setTimeout(wobble, 400);
     });
   }
@@ -1343,9 +1381,16 @@ function startHatching() {
       hatched = true;
       session.hatched = true;
       saveSession();
-      showPop('안녕!', true);
+      // Show greeting in speech bubble
+      thoughtBubble.textContent = '안녕!';
+      thoughtBubble.style.fontSize = '';
+      thoughtBubble.classList.add('visible');
+      speak('안녕');
       updateStatus();
-      decideDefaultState();
+      setTimeout(() => {
+        thoughtBubble.classList.remove('visible');
+        decideDefaultState();
+      }, 1500);
     });
   }
 }
