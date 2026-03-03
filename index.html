@@ -323,6 +323,7 @@
   #debug-modal .level-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
   #debug-modal .level-buttons button { padding: 4px 8px; font-size: 11px; }
   #debug-modal .stat-icons { display: flex; justify-content: center; gap: 4px; font-size: 20px; }
+  #debug-modal .stat-icons-large { font-size: 26px; }
   #debug-modal .stat-icon {
     cursor: pointer;
     opacity: 0.3;
@@ -352,12 +353,12 @@
   </div>
   <div class="debug-section">
     <div class="debug-label">Happiness</div>
-    <div class="stat-icons" id="happiness-icons">
-      <span class="stat-icon" data-value="20">★</span>
-      <span class="stat-icon" data-value="40">★</span>
-      <span class="stat-icon" data-value="60">★</span>
-      <span class="stat-icon" data-value="80">★</span>
-      <span class="stat-icon" data-value="100">★</span>
+    <div class="stat-icons stat-icons-large" id="happiness-icons">
+      <span class="stat-icon" data-value="20">☻</span>
+      <span class="stat-icon" data-value="40">☻</span>
+      <span class="stat-icon" data-value="60">☻</span>
+      <span class="stat-icon" data-value="80">☻</span>
+      <span class="stat-icon" data-value="100">☻</span>
     </div>
   </div>
   <div class="debug-section">
@@ -881,8 +882,10 @@ function doDiscovery() {
 function updateStatus() {
   if (!hatched) return;
   const hearts = Math.ceil(hunger / 20);
-  const stars = Math.ceil(happiness / 20);
-  statusEl.textContent = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts) + '  ' + '★'.repeat(stars) + '☆'.repeat(5 - stars);
+  const smileys = Math.ceil(happiness / 20);
+  const heartsStr = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
+  const smileysStr = '☻'.repeat(smileys) + '☺'.repeat(5 - smileys);
+  statusEl.innerHTML = heartsStr + '  <span style="font-size:21px;position:relative;top:2px">' + smileysStr + '</span>';
 }
 
 function getLearnedWordCount() {
