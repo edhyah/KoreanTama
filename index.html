@@ -220,6 +220,7 @@
   }
 
   #hud-streak { white-space: nowrap; }
+  #hud-words { white-space: nowrap; opacity: 0.7; }
   #hud-progress { white-space: nowrap; letter-spacing: 2px; }
   #hud-debug {
     cursor: pointer;
@@ -339,6 +340,7 @@
 <div id="world">
   <div id="hud">
     <span id="hud-streak">Day 0</span>
+    <span id="hud-words">0 words</span>
     <span id="hud-progress"></span>
     <span id="hud-debug">*</span>
   </div>
@@ -449,9 +451,12 @@ const ADJECTIVES = [
 
 // --- State ---
 let hunger = 100;
-const HUNGER_DURATION = 90000; // 90 seconds to deplete (reconciled from 30s)
+let happiness = 100;
+const HUNGER_DURATION = 35000; // 35 seconds to deplete
+const HAPPINESS_DURATION = 60000; // 60 seconds to deplete (slower than hunger)
 const HUNGER_TICK = 500;
 const HUNGER_PER_TICK = (100 / HUNGER_DURATION) * HUNGER_TICK;
+const HAPPINESS_PER_TICK = (100 / HAPPINESS_DURATION) * HUNGER_TICK;
 let dailyGoalMet = false; // halves hunger rate after goal met
 
 let gameState = 'pre-hatch';
@@ -464,17 +469,22 @@ let hatched = false;
 
 let flyTimer = null;
 let walkTimer = null;
+let discoveryTimer = null;
 
 const FLY_MIN_DELAY = 8000;
 const FLY_MAX_DELAY = 20000;
 const WALK_MIN_DELAY = 5000;
 const WALK_MAX_DELAY = 12000;
+const DISCOVERY_MIN_DELAY = 20000;
+const DISCOVERY_MAX_DELAY = 40000;
+const DISCOVERY_CHANCE = 0.3; // 30% chance when timer fires
 
 // --- Quiz state ---
 let currentQuizWord = null;
 let streak = 0;
 let isReverseQuiz = false;
 let isPhraseQuiz = false;
+let isPlayerInitiated = false; // player tapped to start quiz vs bird got hungry
 let phraseAdjective = null;
 
 // --- Session & streak persistence ---
@@ -630,11 +640,21 @@ function enterState(state) {
       playLoop('idle');
       scheduleFly();
       scheduleWalk();
+      scheduleDiscovery();
       break;
     case 'hungry':
       playLoop('pecking');
       cancelFly();
       cancelWalk();
+      cancelDiscovery();
+      break;
+    case 'bored':
+      // Slower idle when bored
+      ANIMS.idle.speed = 800;
+      playLoop('idle');
+      cancelFly();
+      cancelWalk();
+      cancelDiscovery();
       break;
     case 'flying':
       doFly();
@@ -645,13 +665,22 @@ function enterState(state) {
     case 'eating':
       cancelFly();
       cancelWalk();
+      cancelDiscovery();
+      break;
+    case 'discovering':
+      cancelFly();
+      cancelWalk();
+      cancelDiscovery();
       break;
   }
 }
 
 function decideDefaultState() {
+  ANIMS.idle.speed = 500; // reset idle speed
   if (hunger < 40) {
     enterState('hungry');
+  } else if (happiness < 40) {
+    enterState('bored');
   } else {
     enterState('idle');
   }
@@ -744,19 +773,94 @@ function doWalk() {
   }, 1400);
 }
 
-// --- Hunger ---
+// --- Discovery ---
+
+function scheduleDiscovery() {
+  cancelDiscovery();
+  const delay = DISCOVERY_MIN_DELAY + Math.random() * (DISCOVERY_MAX_DELAY - DISCOVERY_MIN_DELAY);
+  discoveryTimer = setTimeout(() => {
+    if (gameState === 'idle' && !isPlayingOneShot && hunger >= 40 && happiness >= 40 && !currentQuizWord) {
+      if (Math.random() < DISCOVERY_CHANCE) {
+        doDiscovery();
+      } else {
+        scheduleDiscovery(); // try again later
+      }
+    }
+  }, delay);
+}
+
+function cancelDiscovery() {
+  if (discoveryTimer) { clearTimeout(discoveryTimer); discoveryTimer = null; }
+}
+
+function pickDiscoveryWord() {
+  const unlocked = getUnlockedWords();
+  const now = Date.now();
+
+  // Prioritize: unseen words, then words due for review
+  const unseen = unlocked.filter(w => getStats(w.korean).correctCount === 0);
+  if (unseen.length > 0) {
+    return unseen[Math.floor(Math.random() * unseen.length)];
+  }
+
+  const reviewDue = unlocked.filter(w => {
+    const s = getStats(w.korean);
+    return now - s.lastSeen > s.interval;
+  });
+  if (reviewDue.length > 0) {
+    return reviewDue[Math.floor(Math.random() * reviewDue.length)];
+  }
+
+  // Otherwise pick any word
+  return unlocked[Math.floor(Math.random() * unlocked.length)];
+}
+
+function doDiscovery() {
+  gameState = 'discovering';
+  const word = pickDiscoveryWord();
+
+  // Track exposure
+  const stats = getStats(word.korean);
+  if (!stats.exposureCount) stats.exposureCount = 0;
+  stats.exposureCount++;
+  saveStats();
+
+  // Bird does pecking animation (looking at something)
+  playOnce('pecking', () => {
+    // Show the word in thought bubble
+    thoughtBubble.textContent = word.emoji + ' ' + word.korean + '!';
+    thoughtBubble.style.fontSize = '';
+    thoughtBubble.classList.add('visible');
+    speak(word.korean);
+
+    // Brief pause then hide and return to idle
+    setTimeout(() => {
+      thoughtBubble.classList.remove('visible');
+      decideDefaultState();
+    }, 2500);
+  });
+}
+
+// --- Hunger & Happiness ---
 
 function updateStatus() {
   if (!hatched) return;
   const hearts = Math.ceil(hunger / 20);
-  statusEl.textContent = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
+  const stars = Math.ceil(happiness / 20);
+  statusEl.textContent = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts) + '  ' + '★'.repeat(stars) + '☆'.repeat(5 - stars);
+}
+
+function getLearnedWordCount() {
+  return Object.values(wordStats).filter(s => s.correctCount >= 1).length;
 }
 
 function updateHUD() {
   const streakEl = document.getElementById('hud-streak');
+  const wordsEl = document.getElementById('hud-words');
   const progressEl = document.getElementById('hud-progress');
   if (!streakEl || !progressEl) return;
   streakEl.textContent = 'Day ' + session.currentStreak;
+  if (wordsEl) wordsEl.textContent = getLearnedWordCount() + ' words';
   const done = Math.min(session.dailyCorrectCount, session.dailyGoal);
   const remaining = session.dailyGoal - done;
   progressEl.textContent = '■'.repeat(done) + '□'.repeat(remaining);
@@ -764,32 +868,48 @@ function updateHUD() {
 
 function updateThought() {
   if (!hatched) return;
+  // Don't interrupt active quizzes or discoveries
+  if (currentQuizWord) return;
+  if (gameState === 'discovering') return;
+
   if (hunger < 40 && gameState !== 'eating') {
-    if (!currentQuizWord) {
-      startQuiz();
+    startQuiz(false); // bird-initiated (hungry)
+  } else if (happiness < 40 && gameState === 'bored') {
+    // Show bored message (only if not already showing)
+    if (thoughtBubble.textContent !== '심심해...') {
+      thoughtBubble.textContent = '심심해...';
+      thoughtBubble.style.fontSize = '';
+      thoughtBubble.classList.add('visible');
+      speak('심심해');
     }
   } else {
+    // Clear thought bubble when neither hungry nor bored
     thoughtBubble.classList.remove('visible');
     thoughtBubble.style.fontSize = '';
-    closeFoodMenu();
-    currentQuizWord = null;
-    isReverseQuiz = false;
-    isPhraseQuiz = false;
-    phraseAdjective = null;
   }
 }
 
 setInterval(() => {
-  if (!hatched || hunger <= 0) return;
-  const wasOk = hunger >= 40;
-  // After daily goal met, bird is content — halve hunger depletion rate
-  const rate = dailyGoalMet ? HUNGER_PER_TICK * 0.5 : HUNGER_PER_TICK;
-  hunger = Math.max(0, hunger - rate);
+  if (!hatched) return;
+
+  const wasHungerOk = hunger >= 40;
+  const wasHappinessOk = happiness >= 40;
+
+  // After daily goal met, bird is content — halve depletion rates
+  const hungerRate = dailyGoalMet ? HUNGER_PER_TICK * 0.5 : HUNGER_PER_TICK;
+  const happinessRate = dailyGoalMet ? HAPPINESS_PER_TICK * 0.5 : HAPPINESS_PER_TICK;
+
+  hunger = Math.max(0, hunger - hungerRate);
+  happiness = Math.max(0, happiness - happinessRate);
+
   updateStatus();
   updateThought();
 
-  if (wasOk && hunger < 40 && gameState === 'idle') {
+  // State transitions based on needs
+  if (wasHungerOk && hunger < 40 && (gameState === 'idle' || gameState === 'bored')) {
     enterState('hungry');
+  } else if (wasHappinessOk && happiness < 40 && gameState === 'idle') {
+    enterState('bored');
   }
 
 }, HUNGER_TICK);
@@ -928,9 +1048,11 @@ function handleAnswer(chosen, btn) {
     closeFoodMenu();
     thoughtBubble.classList.remove('visible');
     hunger = 100;
+    happiness = Math.min(100, happiness + 30); // Playing restores happiness
     gameState = 'eating';
     cancelFly();
     cancelWalk();
+    cancelDiscovery();
 
     // Handle lapsed bird restoration on first correct answer
     const wasLapsed = returnType === 'lapsed';
@@ -982,6 +1104,7 @@ function handleAnswer(chosen, btn) {
     currentQuizWord = null;
     isReverseQuiz = false;
     isPhraseQuiz = false;
+    isPlayerInitiated = false;
     phraseAdjective = null;
     thoughtBubble.style.fontSize = '';
   } else {
@@ -1007,11 +1130,12 @@ function handleAnswer(chosen, btn) {
   }
 }
 
-function startQuiz() {
+function startQuiz(playerInitiated = false) {
   currentQuizWord = pickQuizWord();
   isReverseQuiz = false;
   isPhraseQuiz = false;
   phraseAdjective = null;
+  isPlayerInitiated = playerInitiated;
 
   const stats = getStats(currentQuizWord.korean);
 
@@ -1038,8 +1162,15 @@ function startQuiz() {
     return;
   }
 
-  // Normal quiz
-  const requestText = currentQuizWord.korean + ' 주세요!';
+  // Normal quiz - different text based on state
+  let requestText;
+  if (playerInitiated) {
+    requestText = currentQuizWord.korean + ' 줄까?'; // "Should I give you X?"
+  } else if (happiness < 40) {
+    requestText = '놀자! ' + currentQuizWord.korean + '?'; // "Let's play! X?"
+  } else {
+    requestText = currentQuizWord.korean + ' 주세요!'; // "Give me X please!"
+  }
   thoughtBubble.textContent = requestText;
   thoughtBubble.style.fontSize = '';
   thoughtBubble.classList.add('visible');
@@ -1059,17 +1190,21 @@ function showPop(text, sayIt) {
 
 // --- Interactions ---
 
-// Click bird -> fly or open food menu
+// Click bird -> start quiz or toggle food menu
 bird.addEventListener('mousedown', (e) => {
   e.preventDefault();
   if (!hatched) return;
-  if (isPlayingOneShot || gameState === 'flying' || gameState === 'walking') return;
+  if (isPlayingOneShot || gameState === 'flying' || gameState === 'walking' || gameState === 'discovering') return;
 
-  if (hunger < 40 || foodMenuOpen) {
+  if (currentQuizWord) {
+    // Quiz active - toggle food menu
     if (foodMenuOpen) closeFoodMenu();
     else openFoodMenu();
   } else {
-    enterState('flying');
+    // No quiz active - start one (player-initiated if not hungry/bored)
+    const playerInitiated = hunger >= 40 && happiness >= 40;
+    startQuiz(playerInitiated);
+    openFoodMenu();
   }
 });
 
