@@ -263,6 +263,46 @@
     transition: filter 0.5s ease;
   }
 
+  /* Mood-based visual states */
+  #bird.mood-happy { filter: saturate(1.1) brightness(1.05); transition: filter 0.5s ease; }
+  #bird.mood-ok { filter: none; transition: filter 0.5s ease; }
+  #bird.mood-meh { filter: saturate(0.8); transition: filter 0.5s ease; }
+  #bird.mood-sad { filter: saturate(0.5) brightness(0.9); transition: filter 0.5s ease; }
+  #bird.mood-very-sad { filter: saturate(0.2) brightness(0.8); transition: filter 0.5s ease; }
+
+  /* Confetti for first feed celebration */
+  .confetti-piece {
+    position: fixed;
+    top: -10px;
+    width: 10px;
+    height: 10px;
+    background: var(--color);
+    pointer-events: none;
+    z-index: 1000;
+    animation: confettiFall 2s ease-out forwards;
+  }
+
+  @keyframes confettiFall {
+    0% {
+      transform: translateY(0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100vh) rotate(720deg) scale(0.5);
+      opacity: 0;
+    }
+  }
+
+  /* Dizzy spin easter egg */
+  @keyframes dizzy {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  #bird.dizzy {
+    animation: dizzy 0.5s ease;
+  }
+
   /* HUD progress bar completion flash */
   @keyframes progressFlash {
     0%, 100% { background: #fffdf5; }
@@ -510,6 +550,33 @@ const ADJECTIVES = [
   { korean: '뜨거운', english: 'hot' },
 ];
 
+// --- Pet Name and Personality Phrases ---
+const PET_NAME = '보리';
+
+const PHRASES = {
+  delicious: ['맛있어!', '최고야!', '더 줘~', '냠냠!', '보리 행복해!'],
+  hungry: ['배고파...', '밥...', '보리 배고파...', '먹고 싶어...'],
+  bored: ['심심해...', '놀아줘...', '뭐해?', '...'],
+  happy: ['기분 좋아!', '오늘 좋은 날!', '놀자!', '헤헤~'],
+  greeting: ['안녕!', '왔어!', '보고 싶었어!', '반가워!'],
+  firstMeal: ['와! 보리 첫 밥이야!', '고마워! 잊지 않을게!'],
+  wrongAnswer: ['이거 아니야...', '다시...', '음...?'],
+  hatchGreeting: ['안녕! 나는 보리야!'],
+};
+
+function randomPhrase(type) {
+  const pool = PHRASES[type];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function getTimeGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return '좋은 아침!';
+  if (hour >= 12 && hour < 18) return '안녕!';
+  if (hour >= 18 && hour < 22) return '좋은 저녁!';
+  return '졸려...'; // late night
+}
+
 // --- State ---
 let hunger = 100;
 let happiness = 100;
@@ -557,6 +624,7 @@ let session = {
   dailyCorrectCount: 0,
   dailyGoal: 10,
   hatched: false,
+  firstFeedComplete: false,
 };
 let returnType = 'first-time'; // 'first-time' | 'same-day' | 'new-day' | 'lapsed'
 
@@ -601,6 +669,7 @@ function loadSession() {
       session.currentStreak = 0;
     }
     session.dailyCorrectCount = 0;
+    session.firstFeedComplete = false; // Reset daily first feed celebration
   }
   session.lastPlayedDate = today;
   hatched = session.hatched;
@@ -658,7 +727,33 @@ function playLoop(animName) {
   animTimer = setInterval(() => {
     currentFrame = (currentFrame + 1) % a.frames;
     setFrame(animName, currentFrame);
+
+    // Random idle curiosity: 2% chance at the end of each idle loop
+    if (animName === 'idle' && currentFrame === 0 && gameState === 'idle' && !currentQuizWord && Math.random() < 0.02) {
+      doIdleCuriosity();
+    }
   }, a.speed);
+}
+
+function doIdleCuriosity() {
+  // Small random action: look to the side or do a little hop
+  if (Math.random() < 0.5) {
+    // Quick look to one side
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    bird.style.transform = `scaleX(${direction})`;
+    setTimeout(() => {
+      bird.style.transform = 'scaleX(1)';
+    }, 800);
+  } else {
+    // Curious thought
+    const curiosities = ['?', '...', '뭐지?', 'ㅎㅎ'];
+    thoughtBubble.textContent = curiosities[Math.floor(Math.random() * curiosities.length)];
+    thoughtBubble.style.fontSize = '';
+    thoughtBubble.classList.add('visible');
+    setTimeout(() => {
+      thoughtBubble.classList.remove('visible');
+    }, 1200);
+  }
 }
 
 function playOnce(animName, callback) {
@@ -912,6 +1007,29 @@ function updateStatus() {
   const heartsStr = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
   const smileysStr = '☻'.repeat(smileys) + '☺'.repeat(5 - smileys);
   statusEl.innerHTML = '<span style="font-size:26px">' + heartsStr + '</span>  <span style="font-size:42px;position:relative;top:4px">' + smileysStr + '</span>';
+  updateMood();
+}
+
+function updateMood() {
+  if (!hatched) return;
+  // Don't override lapsed state
+  if (bird.classList.contains('lapsed')) return;
+
+  // Remove all mood classes
+  bird.classList.remove('mood-happy', 'mood-ok', 'mood-meh', 'mood-sad', 'mood-very-sad');
+
+  // Set mood based on happiness level
+  if (happiness >= 80) {
+    bird.classList.add('mood-happy');
+  } else if (happiness >= 60) {
+    bird.classList.add('mood-ok');
+  } else if (happiness >= 40) {
+    bird.classList.add('mood-meh');
+  } else if (happiness >= 20) {
+    bird.classList.add('mood-sad');
+  } else {
+    bird.classList.add('mood-very-sad');
+  }
 }
 
 function getLearnedWordCount() {
@@ -942,11 +1060,14 @@ function updateThought() {
     startQuiz(false); // bird-initiated (hungry)
   } else if (happiness < 40 && gameState === 'bored') {
     // Show bored message (only if not already showing)
-    if (thoughtBubble.textContent !== '심심해...') {
-      thoughtBubble.textContent = '심심해...';
+    const boredPhrases = PHRASES.bored;
+    const isBoredMsg = boredPhrases.some(p => thoughtBubble.textContent === p);
+    if (!isBoredMsg) {
+      const msg = randomPhrase('bored');
+      thoughtBubble.textContent = msg;
       thoughtBubble.style.fontSize = '';
       thoughtBubble.classList.add('visible');
-      speak('심심해');
+      speak(msg.replace('...', ''));
     }
   } else {
     // Clear thought bubble when neither hungry nor bored
@@ -1105,6 +1226,12 @@ function handleAnswer(chosen, btn) {
     const justMetGoal = !dailyGoalMet && session.dailyCorrectCount >= session.dailyGoal;
     if (justMetGoal) dailyGoalMet = true;
 
+    // Check for first feed celebration
+    const isFirstFeed = !session.firstFeedComplete;
+    if (isFirstFeed) {
+      session.firstFeedComplete = true;
+    }
+
     saveStats();
     saveSession();
 
@@ -1135,6 +1262,19 @@ function handleAnswer(chosen, btn) {
         updateStatus();
         updateHUD();
         setTimeout(() => enterState('flying'), 600);
+      } else if (isFirstFeed) {
+        // First feed celebration with confetti!
+        showConfetti();
+        thoughtBubble.textContent = '와! 보리 첫 밥이야! 고마워!';
+        thoughtBubble.style.fontSize = '';
+        thoughtBubble.classList.add('visible');
+        speak('와! 보리 첫 밥이야! 고마워!');
+        updateStatus();
+        updateHUD();
+        setTimeout(() => {
+          thoughtBubble.classList.remove('visible');
+          enterState('flying');
+        }, 1500);
       } else if (newlyUnlocked) {
         // Category unlock! Show category name + preview emoji
         const preview = newlyUnlocked.words.slice(0, 3).map(w => w.emoji).join('');
@@ -1153,16 +1293,26 @@ function handleAnswer(chosen, btn) {
         if (hudEl) { hudEl.classList.add('goal-pulse'); setTimeout(() => hudEl.classList.remove('goal-pulse'), 1500); }
         setTimeout(() => enterState('flying'), 600);
       } else {
+        // Rare delight: 5% chance for extra excited reaction
+        let responseText;
+        let doExtraCelebration = false;
+        if (Math.random() < 0.05) {
+          responseText = '와!! 이거 제일 좋아해!!';
+          doExtraCelebration = true;
+        } else {
+          responseText = randomPhrase('delicious');
+        }
+
         // Show response in speech bubble
-        thoughtBubble.textContent = '맛있어!';
+        thoughtBubble.textContent = responseText;
         thoughtBubble.style.fontSize = '';
         thoughtBubble.classList.add('visible');
-        speak('맛있어');
+        speak(responseText);
         updateStatus();
         updateHUD();
 
-        // Streak bonus: fly when 3+ in a row
-        if (streak >= 3) {
+        // Streak bonus: fly when 3+ in a row OR rare delight
+        if (streak >= 3 || doExtraCelebration) {
           streak = 0;
           setTimeout(() => {
             thoughtBubble.classList.remove('visible');
@@ -1193,13 +1343,14 @@ function handleAnswer(chosen, btn) {
     saveStats();
     streak = 0;
 
-    // Bird repeats itself
+    // Bird repeats with personality
+    const wrongMsg = randomPhrase('wrongAnswer');
     if (isPhraseQuiz && phraseAdjective) {
-      const phrase = phraseAdjective.korean + ' ' + currentQuizWord.korean + '!';
+      const phrase = wrongMsg + ' ' + phraseAdjective.korean + ' ' + currentQuizWord.korean + '!';
       thoughtBubble.textContent = phrase;
       speak(phrase);
     } else {
-      thoughtBubble.textContent = currentQuizWord.korean + '!';
+      thoughtBubble.textContent = wrongMsg + ' ' + currentQuizWord.korean + '!';
       speak(currentQuizWord.korean);
     }
     thoughtBubble.classList.add('visible');
@@ -1270,6 +1421,27 @@ function showPop(text, sayIt) {
 bird.addEventListener('mousedown', (e) => {
   e.preventDefault();
   if (!hatched) return;
+
+  // Easter egg: rapid tap tracking
+  tapCount++;
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => tapCount = 0, 2000);
+
+  if (tapCount >= 5) {
+    // Dizzy easter egg
+    thoughtBubble.textContent = '어지러워~';
+    thoughtBubble.style.fontSize = '';
+    thoughtBubble.classList.add('visible');
+    bird.classList.add('dizzy');
+    speak('어지러워');
+    tapCount = 0;
+    setTimeout(() => {
+      bird.classList.remove('dizzy');
+      thoughtBubble.classList.remove('visible');
+    }, 1500);
+    return;
+  }
+
   if (isPlayingOneShot || gameState === 'flying' || gameState === 'walking' || gameState === 'discovering') return;
 
   if (currentQuizWord) {
@@ -1297,10 +1469,31 @@ thoughtBubble.addEventListener('click', (e) => {
   }
 });
 
-// Background sparkles
+// Background tap: sparkles + tap-to-move
 world.addEventListener('click', (e) => {
   if (e.target.closest('#creature-zone')) return;
+
   createSparkle(e.clientX, e.clientY);
+
+  // Tap-to-move: only in idle state, not during quiz or one-shot animation
+  if (!hatched || gameState !== 'idle' || isPlayingOneShot || currentQuizWord) return;
+
+  const birdRect = bird.getBoundingClientRect();
+  const birdCenterY = birdRect.top + birdRect.height / 2;
+  const birdCenterX = birdRect.left + birdRect.width / 2;
+  const tapY = e.clientY;
+  const tapX = e.clientX;
+
+  const dx = tapX - birdCenterX;
+  const dy = tapY - birdCenterY;
+
+  if (tapY < birdCenterY - 100) {
+    // Tap is above - fly there
+    flyToPosition(dx, dy);
+  } else {
+    // Tap is at level or below - walk there
+    walkToPosition(dx);
+  }
 });
 
 function createSparkle(x, y) {
@@ -1324,6 +1517,85 @@ function createSparkle(x, y) {
   world.appendChild(c);
   setTimeout(() => c.remove(), 600);
 }
+
+// --- Confetti celebration ---
+function showConfetti() {
+  const colors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff8bd0'];
+  for (let i = 0; i < 30; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.setProperty('--color', colors[Math.floor(Math.random() * colors.length)]);
+    piece.style.animationDelay = Math.random() * 0.5 + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 2500);
+  }
+}
+
+// --- Tap-to-move interaction ---
+function flyToPosition(dx, dy) {
+  gameState = 'flying';
+  cancelWalk();
+  cancelFly();
+  cancelDiscovery();
+  playLoop('flying');
+
+  // Clamp to reasonable bounds
+  const maxX = window.innerWidth / 3;
+  const maxY = window.innerHeight / 4;
+  dx = Math.max(-maxX, Math.min(maxX, dx));
+  dy = Math.max(-maxY, Math.min(0, dy)); // Only fly up
+
+  // Flip bird to face direction
+  bird.style.transform = dx > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+
+  creatureZone.style.transition = 'transform 1.5s ease-in-out';
+  creatureZone.style.transform = `translate(${dx}px, ${dy}px)`;
+
+  setTimeout(() => {
+    // Return to center
+    bird.style.transform = dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+    creatureZone.style.transform = 'translate(0, 0)';
+    setTimeout(() => {
+      creatureZone.style.transition = '';
+      bird.style.transform = 'scaleX(1)';
+      decideDefaultState();
+    }, 1500);
+  }, 1800);
+}
+
+function walkToPosition(dx) {
+  gameState = 'walking';
+  cancelFly();
+  cancelWalk();
+  cancelDiscovery();
+  playLoop('walking');
+
+  // Clamp to reasonable bounds
+  const maxX = window.innerWidth / 3;
+  dx = Math.max(-maxX, Math.min(maxX, dx));
+
+  // Flip bird to face direction
+  bird.style.transform = dx > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+
+  creatureZone.style.transition = 'transform 1.2s linear';
+  creatureZone.style.transform = `translate(${dx}px, 0)`;
+
+  setTimeout(() => {
+    // Return to center
+    bird.style.transform = dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+    creatureZone.style.transform = 'translate(0, 0)';
+    setTimeout(() => {
+      creatureZone.style.transition = '';
+      bird.style.transform = 'scaleX(1)';
+      decideDefaultState();
+    }, 1200);
+  }, 1400);
+}
+
+// --- Easter egg: rapid taps ---
+let tapCount = 0;
+let tapTimer = null;
 
 // --- Hatching sequence ---
 
@@ -1381,16 +1653,17 @@ function startHatching() {
       hatched = true;
       session.hatched = true;
       saveSession();
-      // Show greeting in speech bubble
-      thoughtBubble.textContent = '안녕!';
+      // Show greeting with name
+      const greeting = '안녕! 나는 보리야!';
+      thoughtBubble.textContent = greeting;
       thoughtBubble.style.fontSize = '';
       thoughtBubble.classList.add('visible');
-      speak('안녕');
+      speak(greeting);
       updateStatus();
       setTimeout(() => {
         thoughtBubble.classList.remove('visible');
         decideDefaultState();
-      }, 1500);
+      }, 2000);
     });
   }
 }
@@ -1566,16 +1839,29 @@ function handleReturnState() {
       speak('보고 싶었어');
     }, 1000);
   } else if (returnType === 'new-day') {
-    // Streak continues — excited bird
+    // Streak continues — excited bird with time-based greeting
     ANIMS.idle.speed = 500; // normal speed
+    const greeting = getTimeGreeting();
     playOnce('pecking', () => {
-      showPop('좋은 아침!', true);
+      showPop(greeting, true);
       playOnce('flying', () => {
         decideDefaultState();
       });
     });
+  } else if (returnType === 'same-day') {
+    // Same day return — happy to see player again
+    ANIMS.idle.speed = 500;
+    const greeting = randomPhrase('greeting');
+    thoughtBubble.textContent = greeting;
+    thoughtBubble.style.fontSize = '';
+    thoughtBubble.classList.add('visible');
+    speak(greeting);
+    setTimeout(() => {
+      thoughtBubble.classList.remove('visible');
+      decideDefaultState();
+    }, 1500);
   } else {
-    // Same day or first time after hatch — just resume
+    // First time after hatch — just resume
     ANIMS.idle.speed = 500;
     decideDefaultState();
   }
