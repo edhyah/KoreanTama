@@ -1,0 +1,2276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KoreanTama</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    font-family: 'DotGothic16', monospace;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    color: #e0e0e0;
+  }
+
+  #world {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #b0b8d1;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(4px);
+    z-index: 20;
+    letter-spacing: 0.5px;
+  }
+
+  #hud.goal-pulse {
+    animation: hudPulse 1.5s ease;
+  }
+
+  @keyframes hudPulse {
+    0%, 100% { background: rgba(0, 0, 0, 0.3); }
+    50% { background: rgba(255, 215, 0, 0.2); }
+  }
+
+  #hud-streak { white-space: nowrap; font-weight: bold; }
+  #hud-words { white-space: nowrap; opacity: 0.7; }
+  #hud-progress { white-space: nowrap; letter-spacing: 2px; color: #7EC8E3; }
+  #hud-debug {
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+  }
+  #hud-debug:hover { opacity: 1; }
+
+  /* Creature zone */
+  #creature-zone {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.05s linear;
+  }
+
+  #pet-container {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    cursor: pointer;
+  }
+
+  /* Thought bubble */
+  #thought-bubble {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 12px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    white-space: nowrap;
+    font-size: 16px;
+    color: #2d2d3a;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  #thought-bubble.visible {
+    opacity: 1;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  #thought-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    margin-left: -8px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid rgba(255, 255, 255, 0.95);
+  }
+
+  /* Food menu */
+  #food-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 70px;
+    display: flex;
+    gap: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 15;
+  }
+
+  #food-menu.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .food-option {
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    border-radius: 16px;
+    padding: 12px 16px;
+    font-size: 32px;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+  }
+
+  .food-option.text-option {
+    font-size: 18px;
+    font-family: 'DotGothic16', monospace;
+    color: #2d2d3a;
+    padding: 10px 14px;
+  }
+
+  .food-option:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .food-option:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .food-option.wrong {
+    animation: shake 0.4s ease;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  /* Status bar */
+  #status {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1px;
+  }
+
+  /* Pop text */
+  .pop-text {
+    position: absolute;
+    font-family: 'DotGothic16', monospace;
+    font-size: 20px;
+    color: #FFD166;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 25;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: popUp 1.4s ease forwards;
+  }
+
+  @keyframes popUp {
+    0% { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.5); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(-10px) scale(1.1); }
+    30% { transform: translateX(-50%) translateY(-16px) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-50px) scale(0.8); }
+  }
+
+  /* Sleep overlay */
+  #sleep-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    cursor: pointer;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+  }
+
+  #sleep-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #sleep-overlay .tap-text {
+    margin-top: 20px;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.7);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* Confetti */
+  .confetti-piece {
+    position: fixed;
+    top: -10px;
+    width: 10px;
+    height: 10px;
+    background: var(--color);
+    pointer-events: none;
+    z-index: 1000;
+    border-radius: 2px;
+    animation: confettiFall 2s ease-out forwards;
+  }
+
+  @keyframes confettiFall {
+    0% {
+      transform: translateY(0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100vh) rotate(720deg) scale(0.5);
+      opacity: 0;
+    }
+  }
+
+  /* Debug modal */
+  #debug-modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(30, 30, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px 24px;
+    z-index: 100;
+    text-align: center;
+    font-size: 13px;
+    color: #b0b8d1;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 260px;
+    backdrop-filter: blur(8px);
+  }
+  #debug-modal.visible { display: block; }
+  #debug-modal h3 {
+    margin: 0 0 16px 0;
+    font-size: 15px;
+    font-weight: normal;
+    color: #fff;
+  }
+  #debug-modal .debug-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  #debug-modal .debug-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 8px;
+  }
+  #debug-modal .debug-label {
+    font-size: 11px;
+    margin-bottom: 8px;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  #debug-modal button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin: 4px 3px;
+    font-family: 'DotGothic16', monospace;
+    font-size: 12px;
+    color: #b0b8d1;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #debug-modal button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+  #debug-modal .level-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  #debug-modal .level-buttons button { padding: 6px 10px; font-size: 11px; }
+  #debug-modal .stat-icons { display: flex; justify-content: center; gap: 6px; font-size: 22px; }
+  #debug-modal .stat-icons-large { font-size: 28px; }
+  #debug-modal .stat-icon {
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.15s;
+  }
+  #debug-modal .stat-icon.filled { opacity: 1; }
+  #debug-modal .stat-icon.hover-fill { opacity: 1; }
+  #debug-modal .stat-icon.hover-unfill { opacity: 0.3; }
+</style>
+</head>
+<body>
+<div id="debug-modal">
+  <h3>Debug Menu</h3>
+  <div class="debug-section">
+    <div class="debug-label">Set Progress Level</div>
+    <div class="level-buttons" id="level-buttons"></div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Hunger</div>
+    <div class="stat-icons" id="hunger-icons">
+      <span class="stat-icon" data-value="20">♥</span>
+      <span class="stat-icon" data-value="40">♥</span>
+      <span class="stat-icon" data-value="60">♥</span>
+      <span class="stat-icon" data-value="80">♥</span>
+      <span class="stat-icon" data-value="100">♥</span>
+    </div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Happiness</div>
+    <div class="stat-icons stat-icons-large" id="happiness-icons">
+      <span class="stat-icon" data-value="20">☻</span>
+      <span class="stat-icon" data-value="40">☻</span>
+      <span class="stat-icon" data-value="60">☻</span>
+      <span class="stat-icon" data-value="80">☻</span>
+      <span class="stat-icon" data-value="100">☻</span>
+    </div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Emotional State</div>
+    <div class="level-buttons" id="emotion-buttons"></div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Quiz Frequency</div>
+    <div class="level-buttons" id="quiz-frequency-buttons"></div>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Triggers</div>
+    <button id="debug-discovery">Discovery</button>
+    <button id="debug-hunger-quiz">Hunger Quiz</button>
+    <button id="debug-bored-quiz">Bored Quiz</button>
+    <button id="debug-random-quiz">Random Quiz</button>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Physics Test</div>
+    <button id="debug-squish">Test Squish</button>
+    <button id="debug-wander">Force Wander</button>
+  </div>
+  <div class="debug-section">
+    <div class="debug-label">Data</div>
+    <button id="debug-reset">Reset All Data</button>
+  </div>
+  <button id="debug-close">Close</button>
+</div>
+
+<div id="world">
+  <div id="hud">
+    <span id="hud-streak">Day 0</span>
+    <span id="hud-words">0 words</span>
+    <span id="hud-progress"></span>
+    <span id="hud-debug">*</span>
+  </div>
+  <div id="status"></div>
+  <div id="creature-zone">
+    <div id="thought-bubble"></div>
+    <div id="food-menu"></div>
+    <div id="pet-container">
+      <svg id="pet-svg" viewBox="0 0 200 200" width="220" height="220"></svg>
+    </div>
+  </div>
+</div>
+
+<div id="sleep-overlay">
+  <svg viewBox="0 0 200 200" width="180" height="180" id="sleep-pet-svg"></svg>
+  <div class="tap-text">tap to wake up!</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// EMOTIONAL STATES - Layer 2 of the two-layer state system
+// ═══════════════════════════════════════════════════════════════════
+
+const EMOTIONAL_STATES = {
+  sleepy: {
+    color: "#C3B1E1", scaleX: 1.02, scaleY: 0.96, offY: 2,
+    eyeW: 16, eyeH: 10, pupilR: 6, lidTop: 0.55,
+    mouth: "yawn", blush: false, anim: "drift",
+    phrases: ["졸려요...💤", "잘 자요~", "눈이 감겨요..."]
+  },
+  greeting: {
+    color: "#7EC8E3", scaleX: 1.0, scaleY: 1.0, offY: 0,
+    eyeW: 18, eyeH: 22, pupilR: 8, lidTop: 0.0,
+    mouth: "bigSmile", blush: true, anim: "bounce",
+    phrases: ["안녕! 나는 보리야!", "반가워요!", "잘 지냈어요?"]
+  },
+  hungry: {
+    color: "#F4D9A0", scaleX: 0.96, scaleY: 0.93, offY: 4,
+    eyeW: 20, eyeH: 24, pupilR: 9, lidTop: 0.0,
+    mouth: "open", blush: false, anim: "wobble",
+    phrases: ["배고파요...", "밥 주세요!", "먹고 싶어요..."]
+  },
+  bored: {
+    color: "#D5C4A1", scaleX: 1.0, scaleY: 0.95, offY: 2,
+    eyeW: 16, eyeH: 14, pupilR: 7, lidTop: 0.35,
+    mouth: "flat", blush: false, anim: "drift",
+    phrases: ["심심해요...", "놀아 줘요!", "뭐 할까요?"]
+  },
+  playing: {
+    color: "#87CEEB", scaleX: 1.05, scaleY: 1.03, offY: -1,
+    eyeW: 19, eyeH: 22, pupilR: 8, lidTop: 0.0,
+    mouth: "bigSmile", blush: false, anim: "jump",
+    phrases: ["놀자!", "재밌어요!", "같이 놀아요!"]
+  },
+  eating: {
+    color: "#FFDAB9", scaleX: 1.01, scaleY: 0.98, offY: 1,
+    eyeW: 14, eyeH: 14, pupilR: 7, lidTop: 0.2,
+    mouth: "munch", blush: true, anim: "munch",
+    phrases: ["냠냠!", "맛있어요!", "더 주세요~"]
+  },
+  happy: {
+    color: "#FFD166", scaleX: 1.03, scaleY: 1.02, offY: -1,
+    eyeW: 17, eyeH: 20, pupilR: 8, lidTop: 0.0,
+    mouth: "bigSmile", blush: true, anim: "bounce",
+    phrases: ["행복해요!", "기분 좋아요!", "헤헤~"]
+  },
+  sad: {
+    color: "#A2C5E8", scaleX: 0.97, scaleY: 0.93, offY: 4,
+    eyeW: 18, eyeH: 24, pupilR: 9, lidTop: 0.15,
+    mouth: "frown", blush: false, anim: "drift",
+    phrases: ["슬퍼요...", "기분이 안 좋아요", "위로해 줘요..."]
+  },
+  excited: {
+    color: "#FF8C94", scaleX: 1.06, scaleY: 1.04, offY: -2,
+    eyeW: 20, eyeH: 24, pupilR: 9, lidTop: 0.0,
+    mouth: "bigSmile", blush: true, anim: "jump",
+    phrases: ["와아아!", "대박이다!", "최고! 최고!"]
+  },
+  proud: {
+    color: "#FFB347", scaleX: 1.03, scaleY: 1.03, offY: -1,
+    eyeW: 16, eyeH: 18, pupilR: 7, lidTop: 0.15,
+    mouth: "smirk", blush: true, anim: "nod",
+    phrases: ["잘했지?", "나 멋있어!", "역시 나야!"]
+  },
+  thanking: {
+    color: "#A8D8EA", scaleX: 1.0, scaleY: 0.97, offY: 1,
+    eyeW: 16, eyeH: 20, pupilR: 7, lidTop: 0.15,
+    mouth: "smile", blush: true, anim: "nod",
+    phrases: ["고마워요!", "감사합니다!", "최고예요!"]
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SPRING PHYSICS SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+class Spring {
+  constructor(target, stiffness = 0.15, damping = 0.7) {
+    this.value = target;
+    this.target = target;
+    this.velocity = 0;
+    this.stiffness = stiffness;
+    this.damping = damping;
+  }
+
+  update() {
+    const force = (this.target - this.value) * this.stiffness;
+    this.velocity += force;
+    this.velocity *= this.damping;
+    this.value += this.velocity;
+    return this.value;
+  }
+
+  impulse(amount) {
+    this.velocity += amount;
+  }
+
+  set(value) {
+    this.value = value;
+    this.target = value;
+    this.velocity = 0;
+  }
+}
+
+// Global spring instances for body physics
+const bodyScaleX = new Spring(1.0, 0.2, 0.75);
+const bodyScaleY = new Spring(1.0, 0.2, 0.75);
+const bodyOffX = new Spring(0, 0.12, 0.8);
+const bodyOffY = new Spring(0, 0.12, 0.8);
+
+// Spring instances for eye tracking
+const pupilOffsetX = new Spring(0, 0.1, 0.85);
+const pupilOffsetY = new Spring(0, 0.1, 0.85);
+let lookTarget = { x: 0, y: 0 };
+let lastLookChangeTime = 0;
+
+// Spring instances for wandering position
+const wanderX = new Spring(0, 0.02, 0.92);
+const wanderY = new Spring(0, 0.02, 0.92);
+
+// ═══════════════════════════════════════════════════════════════════
+// LERP HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const lerpColor = (a, b, t) => {
+  const pa = [parseInt(a.slice(1,3),16), parseInt(a.slice(3,5),16), parseInt(a.slice(5,7),16)];
+  const pb = [parseInt(b.slice(1,3),16), parseInt(b.slice(3,5),16), parseInt(b.slice(5,7),16)];
+  const r = Math.round(lerp(pa[0],pb[0],t));
+  const g = Math.round(lerp(pa[1],pb[1],t));
+  const bl = Math.round(lerp(pa[2],pb[2],t));
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${bl.toString(16).padStart(2,'0')}`;
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// MOUTH SHAPES
+// ═══════════════════════════════════════════════════════════════════
+
+function getMouthPath(type, cx, cy, munchPhase = 0) {
+  const dark = "#4A4A5A";
+
+  switch(type) {
+    case 'smile':
+      return `<path d="M${cx-10},${cy} Q${cx},${cy+10} ${cx+10},${cy}" fill="none" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
+    case 'bigSmile':
+      return `<path d="M${cx-14},${cy-2} Q${cx},${cy+14} ${cx+14},${cy-2}" fill="${dark}" stroke="${dark}" stroke-width="1.5" stroke-linecap="round"/>`;
+    case 'frown':
+      return `<path d="M${cx-9},${cy+4} Q${cx},${cy-4} ${cx+9},${cy+4}" fill="none" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
+    case 'flat':
+      return `<line x1="${cx-8}" y1="${cy+1}" x2="${cx+8}" y2="${cy+1}" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
+    case 'open':
+      return `<ellipse cx="${cx}" cy="${cy+2}" rx="8" ry="10" fill="${dark}"/>`;
+    case 'openSmall':
+      return `<ellipse cx="${cx}" cy="${cy+2}" rx="5" ry="6" fill="${dark}"/>`;
+    case 'yawn':
+      return `<ellipse cx="${cx}" cy="${cy+3}" rx="7" ry="9" fill="${dark}"/>`;
+    case 'wavy':
+      return `<path d="M${cx-10},${cy} q5,-4 10,0 q5,4 10,0" fill="none" stroke="${dark}" stroke-width="2" stroke-linecap="round"/>`;
+    case 'pant':
+      return `<ellipse cx="${cx}" cy="${cy+2}" rx="7" ry="5" fill="${dark}"/><ellipse cx="${cx}" cy="${cy+4}" rx="5" ry="2.5" fill="#F87171" opacity="0.7"/>`;
+    case 'smirk':
+      return `<path d="M${cx-6},${cy+1} Q${cx+2},${cy+10} ${cx+10},${cy-1}" fill="none" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
+    case 'munch':
+      // Animate between open and smile for munching
+      if (munchPhase > 0) {
+        return `<path d="M${cx-8},${cy} Q${cx},${cy+8} ${cx+8},${cy}" fill="${dark}" stroke="${dark}" stroke-width="1.5"/>`;
+      } else {
+        return `<path d="M${cx-10},${cy} Q${cx},${cy+10} ${cx+10},${cy}" fill="none" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
+      }
+    default:
+      return `<path d="M${cx-8},${cy} Q${cx},${cy+8} ${cx+8},${cy}" fill="none" stroke="${dark}" stroke-width="2" stroke-linecap="round"/>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SVG CHARACTER RENDERER
+// ═══════════════════════════════════════════════════════════════════
+
+let animationTime = 0;
+let currentEmotionalState = 'sleepy';
+let prevEmotionalState = 'sleepy';
+let transitionProgress = 1;
+const TRANSITION_DURATION = 600; // ms
+let transitionStartTime = 0;
+
+// Idle micro-animation timers
+let lastBlinkTime = 0;
+let blinkState = 0; // 0 = open, 1 = closing, 2 = closed, 3 = opening
+let blinkProgress = 0;
+let nextBlinkDelay = 2000 + Math.random() * 4000;
+let lastLookAroundTime = 0;
+let nextLookDelay = 4000 + Math.random() * 6000;
+let lastWeightShiftTime = 0;
+let nextWeightShiftDelay = 6000 + Math.random() * 6000;
+let weightShiftDirection = 0;
+
+// Wandering state machine
+const WANDER_STATES = ['resting', 'curious', 'walking', 'investigating'];
+let wanderState = 'resting';
+let wanderStateStartTime = 0;
+let wanderTargetX = 0;
+let wanderTargetY = 0;
+
+// Poke reaction state
+let pokeReactionTime = 0;
+let pokeReactionType = null; // 'surprised', 'happy'
+
+// Quiz frequency setting: 'frequent', 'normal', 'rare', 'off'
+let quizFrequency = 'normal';
+const QUIZ_FREQUENCY_INTERVALS = {
+  frequent: { min: 15000, max: 30000 },
+  normal: { min: 30000, max: 60000 },
+  rare: { min: 60000, max: 120000 },
+  off: { min: Infinity, max: Infinity }
+};
+let lastRandomQuizTime = 0;
+let nextRandomQuizDelay = 30000;
+
+function setEmotionalState(newState) {
+  if (newState === currentEmotionalState) return;
+  prevEmotionalState = currentEmotionalState;
+  currentEmotionalState = newState;
+  transitionProgress = 0;
+  transitionStartTime = performance.now();
+}
+
+function updateTransition() {
+  if (transitionProgress >= 1) return;
+  const elapsed = performance.now() - transitionStartTime;
+  const t = Math.min(1, elapsed / TRANSITION_DURATION);
+  // Ease in-out
+  transitionProgress = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POKE REACTION SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+function handlePoke(touchX, touchY) {
+  if (!awake) return;
+  if (gameState === 'eating' || gameState === 'discovering') return;
+
+  // Get pet center in screen coordinates
+  const petRect = petContainer.getBoundingClientRect();
+  const petCenterX = petRect.left + petRect.width / 2;
+  const petCenterY = petRect.top + petRect.height / 2;
+
+  // Calculate direction from center
+  const dx = touchX - petCenterX;
+  const dy = touchY - petCenterY;
+
+  // Normalize direction
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const normX = dx / dist;
+  const normY = dy / dist;
+
+  // Push AWAY from touch point (opposite direction), small fixed distance
+  const pushStrength = 5;
+  bodyOffX.impulse(-normX * pushStrength);
+  bodyOffY.impulse(-normY * pushStrength * 0.5);
+
+  // Minimal squish - very subtle
+  bodyScaleX.impulse(-0.02);
+  bodyScaleY.impulse(-0.015);
+
+  // Show brief reaction
+  pokeReactionTime = performance.now();
+  pokeReactionType = 'surprised';
+
+  // After brief surprise, show happy
+  setTimeout(() => {
+    if (pokeReactionType === 'surprised') {
+      pokeReactionType = 'happy';
+    }
+  }, 150);
+
+  // Clear reaction after animation
+  setTimeout(() => {
+    pokeReactionType = null;
+  }, 600);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IDLE MICRO-ANIMATIONS
+// ═══════════════════════════════════════════════════════════════════
+
+function updateIdleAnimations() {
+  const now = performance.now();
+
+  // Breathing - constant subtle scale pulse (handled in render via springs)
+  const breathCycle = Math.sin(now / 1500) * 0.015;
+  if (gameState === 'idle' && !pokeReactionType) {
+    bodyScaleX.target = 1.0 + breathCycle * 0.5;
+    bodyScaleY.target = 1.0 - breathCycle;
+  }
+
+  // Blinking
+  if (now - lastBlinkTime > nextBlinkDelay) {
+    if (blinkState === 0) {
+      blinkState = 1; // Start closing
+      blinkProgress = 0;
+    }
+  }
+
+  if (blinkState > 0) {
+    blinkProgress += 0.15;
+    if (blinkState === 1 && blinkProgress >= 1) {
+      blinkState = 2; // Fully closed
+      blinkProgress = 0;
+    } else if (blinkState === 2 && blinkProgress >= 0.3) {
+      blinkState = 3; // Start opening
+      blinkProgress = 0;
+    } else if (blinkState === 3 && blinkProgress >= 1) {
+      blinkState = 0; // Fully open
+      lastBlinkTime = now;
+      nextBlinkDelay = 2000 + Math.random() * 4000;
+    }
+  }
+
+  // Look around randomly
+  if (now - lastLookAroundTime > nextLookDelay && gameState === 'idle') {
+    // Pick new random look target
+    lookTarget.x = (Math.random() - 0.5) * 8;
+    lookTarget.y = (Math.random() - 0.5) * 4;
+    lastLookAroundTime = now;
+    nextLookDelay = 4000 + Math.random() * 6000;
+
+    // Occasionally "break eye contact" - look away briefly
+    if (Math.random() < 0.2) {
+      setTimeout(() => {
+        lookTarget.x = 0;
+        lookTarget.y = 0;
+      }, 800 + Math.random() * 400);
+    }
+  }
+
+  // Weight shift
+  if (now - lastWeightShiftTime > nextWeightShiftDelay && gameState === 'idle') {
+    weightShiftDirection = weightShiftDirection === 0 ? (Math.random() < 0.5 ? -1 : 1) : -weightShiftDirection;
+    bodyOffX.target = weightShiftDirection * 2;
+    lastWeightShiftTime = now;
+    nextWeightShiftDelay = 6000 + Math.random() * 6000;
+
+    // Return to center after shift
+    setTimeout(() => {
+      bodyOffX.target = 0;
+    }, 1500 + Math.random() * 500);
+  }
+
+  // Update pupil tracking springs
+  pupilOffsetX.target = lookTarget.x;
+  pupilOffsetY.target = lookTarget.y;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WANDERING SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+function updateWandering() {
+  if (!awake || gameState !== 'idle' || currentQuizWord) return;
+
+  const now = performance.now();
+  const stateTime = now - wanderStateStartTime;
+
+  switch (wanderState) {
+    case 'resting':
+      // Occasionally decide to explore
+      if (stateTime > 8000 && Math.random() < 0.003) {
+        wanderState = 'curious';
+        wanderStateStartTime = now;
+      }
+      break;
+
+    case 'curious':
+      // Look around briefly, then pick destination
+      if (stateTime > 1500) {
+        // Pick a wander target (within bounds)
+        const maxX = 80;
+        const maxY = 40;
+        wanderTargetX = (Math.random() - 0.5) * maxX * 2;
+        wanderTargetY = (Math.random() - 0.3) * maxY; // Bias slightly upward
+
+        wanderX.target = wanderTargetX;
+        wanderY.target = wanderTargetY;
+
+        wanderState = 'walking';
+        wanderStateStartTime = now;
+      }
+      break;
+
+    case 'walking':
+      // Check if arrived at destination
+      const distX = Math.abs(wanderX.value - wanderTargetX);
+      const distY = Math.abs(wanderY.value - wanderTargetY);
+
+      if ((distX < 3 && distY < 3) || stateTime > 4000) {
+        wanderState = 'investigating';
+        wanderStateStartTime = now;
+
+        // Look at "something"
+        lookTarget.x = wanderTargetX > 0 ? 4 : -4;
+        lookTarget.y = -2;
+      }
+      break;
+
+    case 'investigating':
+      // Pause and look around
+      if (stateTime > 2000 + Math.random() * 1500) {
+        // Return to center
+        wanderX.target = 0;
+        wanderY.target = 0;
+        wanderState = 'resting';
+        wanderStateStartTime = now;
+        lookTarget.x = 0;
+        lookTarget.y = 0;
+      }
+      break;
+  }
+
+  // Update wander springs
+  wanderX.update();
+  wanderY.update();
+
+  // Apply wander position to creature zone
+  if (wanderState !== 'resting' || Math.abs(wanderX.value) > 1 || Math.abs(wanderY.value) > 1) {
+    creatureZone.style.transform = `translate(calc(-50% + ${wanderX.value}px), calc(-50% + ${wanderY.value}px))`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RANDOM QUIZ TRIGGER SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+function updateRandomQuizTrigger() {
+  if (!awake || currentQuizWord || quizFrequency === 'off') return;
+  if (gameState !== 'idle') return;
+  if (hunger < 40) return; // Already showing hunger quiz
+
+  const now = performance.now();
+
+  if (now - lastRandomQuizTime > nextRandomQuizDelay) {
+    // Trigger a random quiz
+    triggerRandomQuiz();
+
+    // Schedule next quiz
+    const freq = QUIZ_FREQUENCY_INTERVALS[quizFrequency];
+    nextRandomQuizDelay = freq.min + Math.random() * (freq.max - freq.min);
+    lastRandomQuizTime = now;
+  }
+}
+
+function triggerRandomQuiz() {
+  if (!awake || currentQuizWord) return;
+
+  // Pet initiates quiz with curiosity expression
+  setEmotionalState('playing');
+
+  // Show thought bubble asking to play
+  const phrases = ['놀자!', '뭐 먹을까?', '같이 공부하자!', '심심해~'];
+  const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+  thoughtBubble.textContent = phrase;
+  thoughtBubble.classList.add('visible');
+  speak(phrase);
+
+  // Start the actual quiz after brief pause
+  setTimeout(() => {
+    thoughtBubble.classList.remove('visible');
+    startQuiz(false);
+  }, 1200);
+}
+
+function renderCharacter(svgElement, forceSleepy = false) {
+  // Update all springs
+  bodyScaleX.update();
+  bodyScaleY.update();
+  bodyOffX.update();
+  bodyOffY.update();
+  pupilOffsetX.update();
+  pupilOffsetY.update();
+
+  const cur = EMOTIONAL_STATES[forceSleepy ? 'sleepy' : currentEmotionalState];
+  const prev = EMOTIONAL_STATES[prevEmotionalState];
+  const t = transitionProgress;
+
+  // Interpolate values
+  const color = lerpColor(prev.color, cur.color, t);
+  let sx = lerp(prev.scaleX, cur.scaleX, t);
+  let sy = lerp(prev.scaleY, cur.scaleY, t);
+  const offY = lerp(prev.offY, cur.offY, t);
+  const eyeW = lerp(prev.eyeW, cur.eyeW, t);
+  const eyeH = lerp(prev.eyeH, cur.eyeH, t);
+  const pupilR = lerp(prev.pupilR, cur.pupilR, t);
+  let lidTop = lerp(prev.lidTop, cur.lidTop, t);
+  const blush = t > 0.5 ? cur.blush : prev.blush;
+  let mouth = t > 0.5 ? cur.mouth : prev.mouth;
+  const anim = t > 0.5 ? cur.anim : prev.anim;
+
+  // Apply spring physics to scale
+  sx *= bodyScaleX.value;
+  sy *= bodyScaleY.value;
+
+  // Apply blink animation to lid
+  if (blinkState === 1) {
+    lidTop = Math.max(lidTop, blinkProgress * 0.9);
+  } else if (blinkState === 2) {
+    lidTop = 0.9;
+  } else if (blinkState === 3) {
+    lidTop = Math.max(lidTop, (1 - blinkProgress) * 0.9);
+  }
+
+  // Poke reaction overrides
+  if (pokeReactionType === 'surprised') {
+    mouth = 'openSmall';
+  } else if (pokeReactionType === 'happy') {
+    mouth = 'smile';
+  }
+
+  // Animation offsets from emotional state animation
+  const sec = animationTime / 60;
+  let animOffX = 0, animOffY = 0, animRot = 0, animScale = 1;
+
+  switch(anim) {
+    case 'bounce':  animOffY = Math.sin(sec * 2.5) * 1.5; break;
+    case 'wobble':  animRot = Math.sin(sec * 3) * 1.2; break;
+    case 'drift':   animOffY = Math.sin(sec * 1.2) * 1; animOffX = Math.sin(sec * 0.8) * 0.6; break;
+    case 'shiver':  animOffX = Math.sin(sec * 18) * 0.8; break;
+    case 'nod':     animOffY = Math.sin(sec * 2) * 1.2; break;
+    case 'jump':    animOffY = -Math.abs(Math.sin(sec * 3)) * 3; break;
+    case 'melt':    animScale = 1 + Math.sin(sec * 1.5) * 0.01; animOffY = Math.sin(sec * 1.5) * 0.8; break;
+    case 'munch':   animScale = 1 + Math.sin(sec * 6) * 0.015; break;
+    case 'float':   animOffY = Math.sin(sec * 1.8) * 1.5; animOffX = Math.sin(sec * 1.1) * 0.6; break;
+  }
+
+  // Add spring-based position offsets
+  animOffX += bodyOffX.value;
+  animOffY += bodyOffY.value;
+
+  // Body blob path
+  const bw = 42 * sx, bh = 58 * sy;
+  const bodyY = 100 + offY + animOffY;
+  const bodyPath = `M${100-bw},${bodyY}
+    C${100-bw},${bodyY-bh*1.1} ${100+bw},${bodyY-bh*1.1} ${100+bw},${bodyY}
+    C${100+bw},${bodyY+bh*0.9} ${100-bw},${bodyY+bh*0.9} ${100-bw},${bodyY}Z`;
+
+  // Eye positions
+  const eyeCX_L = 82, eyeCX_R = 118;
+  const eyeCY = 95 + offY + animOffY;
+
+  // Pupil offset from eye tracking
+  const pupilX = pupilOffsetX.value;
+  const pupilY = pupilOffsetY.value;
+
+  // Munch phase for animated mouth
+  const munchPhase = Math.sin(sec * 6);
+
+  // Build SVG
+  let svg = '';
+
+  // Shadow - scale with body
+  const shadowScale = (sx + sy) / 2;
+  svg += `<ellipse cx="${100+animOffX}" cy="${168+offY*0.3}" rx="${30*shadowScale}" ry="5" fill="rgba(0,0,0,0.15)"/>`;
+
+  // Body group with transforms
+  svg += `<g transform="translate(${animOffX},0) rotate(${animRot},100,${bodyY})">`;
+  svg += `<g transform="scale(${animScale})" style="transform-origin: 100px ${bodyY}px">`;
+  svg += `<path d="${bodyPath}" fill="${color}"/>`;
+  svg += `</g></g>`;
+
+  // Face group
+  svg += `<g transform="translate(${animOffX},0) rotate(${animRot},100,${bodyY})">`;
+
+  // Eyes
+  [eyeCX_L, eyeCX_R].forEach((cx, i) => {
+    const clipId = `eye-clip-${i}`;
+    const eyeTop = eyeCY - eyeH/2;
+    const lidY = eyeTop + eyeH * lidTop;
+
+    // Clamp pupil within eye bounds
+    const maxPupilX = (eyeW/2 - pupilR * 0.85) * 0.7;
+    const maxPupilY = (eyeH/2 - pupilR) * 0.5;
+    const clampedPupilX = Math.max(-maxPupilX, Math.min(maxPupilX, pupilX));
+    const clampedPupilY = Math.max(-maxPupilY, Math.min(maxPupilY, pupilY));
+
+    svg += `<defs><clipPath id="${clipId}"><ellipse cx="${cx}" cy="${eyeCY}" rx="${eyeW/2}" ry="${eyeH/2}"/></clipPath></defs>`;
+    svg += `<ellipse cx="${cx}" cy="${eyeCY}" rx="${eyeW/2}" ry="${eyeH/2}" fill="white"/>`;
+    svg += `<ellipse cx="${cx + clampedPupilX}" cy="${eyeCY + clampedPupilY + 1}" rx="${pupilR * 0.85}" ry="${pupilR}" fill="#2d2d3a" clip-path="url(#${clipId})"/>`;
+
+    if (lidTop > 0.01) {
+      svg += `<rect x="${cx - eyeW/2 - 2}" y="${eyeTop - 2}" width="${eyeW + 4}" height="${lidY - eyeTop + 2}" fill="${color}" clip-path="url(#${clipId})"/>`;
+    }
+    if (lidTop > 0.05) {
+      const lidColor = lerpColor(color, "#333", 0.25);
+      svg += `<line x1="${cx-eyeW/2}" y1="${lidY}" x2="${cx+eyeW/2}" y2="${lidY}" stroke="${lidColor}" stroke-width="1.5" stroke-linecap="round" clip-path="url(#${clipId})"/>`;
+    }
+  });
+
+  // Blush
+  if (blush || pokeReactionType === 'happy') {
+    svg += `<ellipse cx="${eyeCX_L - 6}" cy="${eyeCY + eyeH/2 + 4}" rx="8" ry="4" fill="#FF8A8A" opacity="0.3"/>`;
+    svg += `<ellipse cx="${eyeCX_R + 6}" cy="${eyeCY + eyeH/2 + 4}" rx="8" ry="4" fill="#FF8A8A" opacity="0.3"/>`;
+  }
+
+  // Mouth
+  svg += getMouthPath(mouth, 100, eyeCY + eyeH/2 + 10, munchPhase);
+
+  svg += `</g>`;
+
+  svgElement.innerHTML = svg;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WORD BANK (8 categories, ~80 words)
+// ═══════════════════════════════════════════════════════════════════
+
+const CATEGORIES = [
+  { id: 'food', name: '음식', unlockAt: 0, words: [
+    { korean: '사과', emoji: '&#x1F34E;' }, { korean: '바나나', emoji: '&#x1F34C;' },
+    { korean: '빵', emoji: '&#x1F35E;' }, { korean: '물', emoji: '&#x1F4A7;' },
+    { korean: '우유', emoji: '&#x1F95B;' }, { korean: '딸기', emoji: '&#x1F353;' },
+    { korean: '포도', emoji: '&#x1F347;' }, { korean: '수박', emoji: '&#x1F349;' },
+    { korean: '주스', emoji: '&#x1F9C3;' }, { korean: '쿠키', emoji: '&#x1F36A;' },
+    { korean: '밥', emoji: '&#x1F35A;' }, { korean: '케이크', emoji: '&#x1F370;' },
+    { korean: '사탕', emoji: '&#x1F36C;' }, { korean: '아이스크림', emoji: '&#x1F366;' },
+    { korean: '차', emoji: '&#x1F375;' }, { korean: '복숭아', emoji: '&#x1F351;' },
+    { korean: '옥수수', emoji: '&#x1F33D;' }, { korean: '당근', emoji: '&#x1F955;' },
+    { korean: '치즈', emoji: '&#x1F9C0;' }, { korean: '초콜릿', emoji: '&#x1F36B;' },
+  ]},
+  { id: 'animals', name: '동물', unlockAt: 15, words: [
+    { korean: '강아지', emoji: '&#x1F415;' }, { korean: '고양이', emoji: '&#x1F431;' },
+    { korean: '토끼', emoji: '&#x1F430;' }, { korean: '새', emoji: '&#x1F426;' },
+    { korean: '물고기', emoji: '&#x1F41F;' }, { korean: '곰', emoji: '&#x1F43B;' },
+    { korean: '원숭이', emoji: '&#x1F435;' }, { korean: '호랑이', emoji: '&#x1F42F;' },
+    { korean: '코끼리', emoji: '&#x1F418;' }, { korean: '쥐', emoji: '&#x1F42D;' },
+  ]},
+  { id: 'colors', name: '색깔', unlockAt: 30, words: [
+    { korean: '빨간색', emoji: '&#x1F534;' }, { korean: '파란색', emoji: '&#x1F535;' },
+    { korean: '노란색', emoji: '&#x1F7E1;' }, { korean: '초록색', emoji: '&#x1F7E2;' },
+    { korean: '하얀색', emoji: '&#x26AA;' }, { korean: '까만색', emoji: '&#x26AB;' },
+    { korean: '보라색', emoji: '&#x1F7E3;' }, { korean: '주황색', emoji: '&#x1F7E0;' },
+  ]},
+  { id: 'objects', name: '물건', unlockAt: 50, words: [
+    { korean: '집', emoji: '&#x1F3E0;' }, { korean: '나무', emoji: '&#x1F333;' },
+    { korean: '꽃', emoji: '&#x1F338;' }, { korean: '책', emoji: '&#x1F4D6;' },
+    { korean: '연필', emoji: '&#x270F;&#xFE0F;' }, { korean: '가방', emoji: '&#x1F392;' },
+    { korean: '시계', emoji: '&#x23F0;' }, { korean: '전화', emoji: '&#x1F4F1;' },
+    { korean: '열쇠', emoji: '&#x1F511;' }, { korean: '우산', emoji: '&#x2602;&#xFE0F;' },
+  ]},
+  { id: 'weather', name: '날씨', unlockAt: 70, words: [
+    { korean: '해', emoji: '&#x2600;&#xFE0F;' }, { korean: '비', emoji: '&#x1F327;&#xFE0F;' },
+    { korean: '눈', emoji: '&#x2744;&#xFE0F;' }, { korean: '구름', emoji: '&#x2601;&#xFE0F;' },
+    { korean: '바람', emoji: '&#x1F32C;&#xFE0F;' }, { korean: '번개', emoji: '&#x26A1;' },
+    { korean: '무지개', emoji: '&#x1F308;' }, { korean: '별', emoji: '&#x2B50;' },
+  ]},
+  { id: 'body', name: '몸', unlockAt: 90, words: [
+    { korean: '눈', emoji: '&#x1F441;&#xFE0F;' }, { korean: '코', emoji: '&#x1F443;' },
+    { korean: '입', emoji: '&#x1F444;' }, { korean: '귀', emoji: '&#x1F442;' },
+    { korean: '손', emoji: '&#x270B;' }, { korean: '발', emoji: '&#x1F9B6;' },
+    { korean: '머리', emoji: '&#x1F5E3;&#xFE0F;' }, { korean: '하트', emoji: '&#x2764;&#xFE0F;' },
+  ]},
+  { id: 'numbers', name: '숫자', unlockAt: 110, words: [
+    { korean: '하나', emoji: '1&#xFE0F;&#x20E3;' }, { korean: '둘', emoji: '2&#xFE0F;&#x20E3;' },
+    { korean: '셋', emoji: '3&#xFE0F;&#x20E3;' }, { korean: '넷', emoji: '4&#xFE0F;&#x20E3;' },
+    { korean: '다섯', emoji: '5&#xFE0F;&#x20E3;' },
+  ]},
+  { id: 'actions', name: '동작', unlockAt: 135, words: [
+    { korean: '먹다', emoji: '&#x1F37D;&#xFE0F;' }, { korean: '자다', emoji: '&#x1F634;' },
+    { korean: '걷다', emoji: '&#x1F6B6;' }, { korean: '달리다', emoji: '&#x1F3C3;' },
+    { korean: '울다', emoji: '&#x1F622;' }, { korean: '웃다', emoji: '&#x1F60A;' },
+    { korean: '노래', emoji: '&#x1F3B5;' }, { korean: '춤', emoji: '&#x1F483;' },
+  ]},
+];
+
+// Flatten for quick lookup
+const WORDS = [];
+CATEGORIES.forEach(cat => {
+  cat.words.forEach(w => {
+    WORDS.push({ korean: w.korean, emoji: w.emoji, category: cat.id });
+  });
+});
+
+// Adjectives for phrase challenges
+const ADJECTIVES = [
+  { korean: '빨간', english: 'red' },
+  { korean: '큰', english: 'big' },
+  { korean: '작은', english: 'small' },
+  { korean: '차가운', english: 'cold' },
+  { korean: '뜨거운', english: 'hot' },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// PET PERSONALITY AND PHRASES
+// ═══════════════════════════════════════════════════════════════════
+
+const PET_NAME = '보리';
+
+const PHRASES = {
+  delicious: ['맛있어!', '최고야!', '더 줘~', '냠냠!', '보리 행복해!'],
+  hungry: ['배고파...', '밥...', '보리 배고파...', '먹고 싶어...'],
+  bored: ['심심해...', '놀아줘...', '뭐해?', '...'],
+  happy: ['기분 좋아!', '오늘 좋은 날!', '놀자!', '헤헤~'],
+  greeting: ['안녕!', '왔어!', '보고 싶었어!', '반가워!'],
+  firstMeal: ['와! 보리 첫 밥이야!', '고마워! 잊지 않을게!'],
+  wrongAnswer: ['이거 아니야...', '다시...', '음...?'],
+  wakeGreeting: ['안녕! 나는 보리야!'],
+};
+
+function randomPhrase(type) {
+  const pool = PHRASES[type];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function getTimeGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return '좋은 아침!';
+  if (hour >= 12 && hour < 18) return '안녕!';
+  if (hour >= 18 && hour < 22) return '좋은 저녁!';
+  return '졸려...';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GAME STATE (Layer 1)
+// ═══════════════════════════════════════════════════════════════════
+
+let hunger = 100;
+let happiness = 100;
+const HUNGER_DURATION = 35000;
+const HAPPINESS_DURATION = 60000;
+const TICK_INTERVAL = 500;
+const HUNGER_PER_TICK = (100 / HUNGER_DURATION) * TICK_INTERVAL;
+const HAPPINESS_PER_TICK = (100 / HAPPINESS_DURATION) * TICK_INTERVAL;
+let dailyGoalMet = false;
+
+let gameState = 'sleeping'; // sleeping -> waking -> idle <-> quiz <-> eating
+let foodMenuOpen = false;
+let awake = false;
+
+let walkTimer = null;
+let flyTimer = null;
+let discoveryTimer = null;
+
+const WALK_MIN_DELAY = 5000;
+const WALK_MAX_DELAY = 12000;
+const FLY_MIN_DELAY = 8000;
+const FLY_MAX_DELAY = 20000;
+const DISCOVERY_MIN_DELAY = 20000;
+const DISCOVERY_MAX_DELAY = 40000;
+const DISCOVERY_CHANCE = 0.3;
+
+// Quiz state
+let currentQuizWord = null;
+let streak = 0;
+let isReverseQuiz = false;
+let isPhraseQuiz = false;
+let isPlayerInitiated = false;
+let phraseAdjective = null;
+
+// Session & persistence
+let wordStats = {};
+let session = {
+  lastPlayedDate: null,
+  currentStreak: 0,
+  bestStreak: 0,
+  dailyCorrectCount: 0,
+  dailyGoal: 10,
+  awake: false,
+  firstFeedComplete: false,
+};
+let returnType = 'first-time';
+
+// ═══════════════════════════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════════════════════════
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadStats() {
+  try {
+    const saved = localStorage.getItem('koreanTamaStats');
+    if (saved) wordStats = JSON.parse(saved);
+  } catch (e) { /* ignore */ }
+}
+
+function loadSession() {
+  try {
+    const saved = localStorage.getItem('koreanTamaSession');
+    if (saved) {
+      const s = JSON.parse(saved);
+      Object.assign(session, s);
+    }
+  } catch (e) { /* ignore */ }
+
+  const today = getTodayStr();
+  if (!session.lastPlayedDate) {
+    returnType = 'first-time';
+  } else if (session.lastPlayedDate === today) {
+    returnType = 'same-day';
+  } else {
+    const last = new Date(session.lastPlayedDate + 'T00:00:00');
+    const now = new Date(today + 'T00:00:00');
+    const diffDays = Math.round((now - last) / 86400000);
+    if (diffDays === 1) {
+      returnType = 'new-day';
+      session.currentStreak++;
+      if (session.currentStreak > session.bestStreak) {
+        session.bestStreak = session.currentStreak;
+      }
+    } else {
+      returnType = 'lapsed';
+      session.currentStreak = 0;
+    }
+    session.dailyCorrectCount = 0;
+    session.firstFeedComplete = false;
+  }
+  session.lastPlayedDate = today;
+  awake = session.awake;
+  saveSession();
+}
+
+function saveStats() {
+  try {
+    localStorage.setItem('koreanTamaStats', JSON.stringify(wordStats));
+  } catch (e) { /* ignore */ }
+}
+
+function saveSession() {
+  try {
+    localStorage.setItem('koreanTamaSession', JSON.stringify(session));
+  } catch (e) { /* ignore */ }
+}
+
+function getStats(korean) {
+  if (!wordStats[korean]) wordStats[korean] = { correctCount: 0, correctStreak: 0, lastSeen: 0, interval: 0 };
+  return wordStats[korean];
+}
+
+function getTotalCorrect() {
+  return Object.values(wordStats).reduce((sum, s) => sum + s.correctCount, 0);
+}
+
+function getUnlockedCategories() {
+  const total = getTotalCorrect();
+  return CATEGORIES.filter(c => total >= c.unlockAt);
+}
+
+function getUnlockedWords() {
+  const unlocked = getUnlockedCategories();
+  return WORDS.filter(w => unlocked.some(c => c.id === w.category));
+}
+
+function getLearnedWordCount() {
+  return Object.values(wordStats).filter(s => s.correctCount >= 1).length;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DOM REFERENCES
+// ═══════════════════════════════════════════════════════════════════
+
+const petSvg = document.getElementById('pet-svg');
+const sleepPetSvg = document.getElementById('sleep-pet-svg');
+const thoughtBubble = document.getElementById('thought-bubble');
+const foodMenu = document.getElementById('food-menu');
+const statusEl = document.getElementById('status');
+const sleepOverlay = document.getElementById('sleep-overlay');
+const creatureZone = document.getElementById('creature-zone');
+const petContainer = document.getElementById('pet-container');
+
+// ═══════════════════════════════════════════════════════════════════
+// SPEECH SYNTHESIS
+// ═══════════════════════════════════════════════════════════════════
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UI UPDATES
+// ═══════════════════════════════════════════════════════════════════
+
+function updateStatus() {
+  if (!awake) return;
+  const hearts = Math.ceil(hunger / 20);
+  const smileys = Math.ceil(happiness / 20);
+  const heartsStr = '♥'.repeat(hearts) + '♡'.repeat(5 - hearts);
+  const smileysStr = '☻'.repeat(smileys) + '☺'.repeat(5 - smileys);
+  statusEl.innerHTML = '<span style="font-size:24px;color:#ff6b6b">' + heartsStr + '</span>  <span style="font-size:32px;color:#ffd166">' + smileysStr + '</span>';
+}
+
+function updateHUD() {
+  const streakEl = document.getElementById('hud-streak');
+  const wordsEl = document.getElementById('hud-words');
+  const progressEl = document.getElementById('hud-progress');
+  if (!streakEl || !progressEl) return;
+  streakEl.textContent = 'Day ' + session.currentStreak;
+  if (wordsEl) wordsEl.textContent = getLearnedWordCount() + ' words';
+  const done = Math.min(session.dailyCorrectCount, session.dailyGoal);
+  const remaining = session.dailyGoal - done;
+  progressEl.textContent = '■'.repeat(done) + '□'.repeat(remaining);
+}
+
+function showPop(text, sayIt) {
+  const el = document.createElement('div');
+  el.className = 'pop-text';
+  el.textContent = text;
+  el.style.left = '50%';
+  el.style.bottom = '100%';
+  creatureZone.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+  if (sayIt) speak(text);
+}
+
+function showConfetti() {
+  const colors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff8bd0'];
+  for (let i = 0; i < 30; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.setProperty('--color', colors[Math.floor(Math.random() * colors.length)]);
+    piece.style.animationDelay = Math.random() * 0.5 + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 2500);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GAME STATE MACHINE
+// ═══════════════════════════════════════════════════════════════════
+
+function mapGameStateToEmotion() {
+  // Map game events to emotional states for SVG rendering
+  if (gameState === 'sleeping') return 'sleepy';
+  if (gameState === 'waking') return 'greeting';
+  if (gameState === 'eating') return 'eating';
+  if (gameState === 'discovering') return 'playing';
+
+  // Quiz states
+  if (currentQuizWord) return 'playing';
+
+  // Needs-based states
+  if (hunger < 40) return 'hungry';
+  if (happiness < 40) return 'bored';
+
+  // Default idle states based on overall happiness
+  if (happiness >= 80) return 'happy';
+  return 'happy';
+}
+
+function enterState(state) {
+  gameState = state;
+
+  switch (state) {
+    case 'sleeping':
+      setEmotionalState('sleepy');
+      cancelTimers();
+      break;
+    case 'waking':
+      setEmotionalState('greeting');
+      break;
+    case 'idle':
+      setEmotionalState(mapGameStateToEmotion());
+      scheduleWalk();
+      scheduleFly();
+      scheduleDiscovery();
+      // Initialize wandering state
+      wanderStateStartTime = performance.now();
+      break;
+    case 'hungry':
+      setEmotionalState('hungry');
+      cancelTimers();
+      break;
+    case 'bored':
+      setEmotionalState('bored');
+      cancelTimers();
+      break;
+    case 'eating':
+      setEmotionalState('eating');
+      cancelTimers();
+      break;
+    case 'discovering':
+      setEmotionalState('playing');
+      cancelTimers();
+      break;
+    case 'walking':
+    case 'flying':
+      // Keep current emotion during movement
+      break;
+  }
+}
+
+function decideDefaultState() {
+  if (hunger < 40) {
+    enterState('hungry');
+  } else if (happiness < 40) {
+    enterState('bored');
+  } else {
+    enterState('idle');
+  }
+}
+
+function cancelTimers() {
+  if (walkTimer) { clearTimeout(walkTimer); walkTimer = null; }
+  if (flyTimer) { clearTimeout(flyTimer); flyTimer = null; }
+  if (discoveryTimer) { clearTimeout(discoveryTimer); discoveryTimer = null; }
+
+  // Return wandering to center when changing states
+  wanderState = 'resting';
+  wanderX.target = 0;
+  wanderY.target = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AMBIENT MOVEMENT
+// ═══════════════════════════════════════════════════════════════════
+
+function scheduleWalk() {
+  if (walkTimer) clearTimeout(walkTimer);
+  const delay = WALK_MIN_DELAY + Math.random() * (WALK_MAX_DELAY - WALK_MIN_DELAY);
+  walkTimer = setTimeout(() => {
+    if (gameState === 'idle' && !currentQuizWord && hunger >= 40) {
+      if (Math.random() < 0.5) {
+        doWalk();
+      }
+    }
+    scheduleWalk();
+  }, delay);
+}
+
+function scheduleFly() {
+  if (flyTimer) clearTimeout(flyTimer);
+  const delay = FLY_MIN_DELAY + Math.random() * (FLY_MAX_DELAY - FLY_MIN_DELAY);
+  flyTimer = setTimeout(() => {
+    if (gameState === 'idle' && !currentQuizWord && hunger >= 40) {
+      if (Math.random() < 0.3) {
+        doFly();
+      }
+    }
+    scheduleFly();
+  }, delay);
+}
+
+function doWalk() {
+  gameState = 'walking';
+  const dx = (Math.random() < 0.5 ? -1 : 1) * (60 + Math.random() * 80);
+
+  creatureZone.style.transition = 'transform 1.2s linear';
+  creatureZone.style.transform = `translate(calc(-50% + ${dx}px), -50%)`;
+
+  setTimeout(() => {
+    creatureZone.style.transform = 'translate(-50%, -50%)';
+    setTimeout(() => {
+      creatureZone.style.transition = 'transform 0.05s linear';
+      decideDefaultState();
+    }, 1200);
+  }, 1400);
+}
+
+function doFly() {
+  gameState = 'flying';
+  const dx = (Math.random() - 0.5) * 180;
+  const dy = -(40 + Math.random() * 60);
+
+  creatureZone.style.transition = 'transform 1.5s ease-in-out';
+  creatureZone.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+  setTimeout(() => {
+    creatureZone.style.transform = 'translate(-50%, -50%)';
+    setTimeout(() => {
+      creatureZone.style.transition = 'transform 0.05s linear';
+      decideDefaultState();
+    }, 1500);
+  }, 1800);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DISCOVERY MODE
+// ═══════════════════════════════════════════════════════════════════
+
+function scheduleDiscovery() {
+  if (discoveryTimer) clearTimeout(discoveryTimer);
+  const delay = DISCOVERY_MIN_DELAY + Math.random() * (DISCOVERY_MAX_DELAY - DISCOVERY_MIN_DELAY);
+  discoveryTimer = setTimeout(() => {
+    if (gameState === 'idle' && !currentQuizWord && hunger >= 40 && happiness >= 40) {
+      if (Math.random() < DISCOVERY_CHANCE) {
+        doDiscovery();
+      }
+    }
+    scheduleDiscovery();
+  }, delay);
+}
+
+function pickDiscoveryWord() {
+  const unlocked = getUnlockedWords();
+  const now = Date.now();
+
+  const unseen = unlocked.filter(w => getStats(w.korean).correctCount === 0);
+  if (unseen.length > 0) {
+    return unseen[Math.floor(Math.random() * unseen.length)];
+  }
+
+  const reviewDue = unlocked.filter(w => {
+    const s = getStats(w.korean);
+    return now - s.lastSeen > s.interval;
+  });
+  if (reviewDue.length > 0) {
+    return reviewDue[Math.floor(Math.random() * reviewDue.length)];
+  }
+
+  return unlocked[Math.floor(Math.random() * unlocked.length)];
+}
+
+function doDiscovery() {
+  enterState('discovering');
+  const word = pickDiscoveryWord();
+
+  const stats = getStats(word.korean);
+  if (!stats.exposureCount) stats.exposureCount = 0;
+  stats.exposureCount++;
+  saveStats();
+
+  // Show word in thought bubble
+  thoughtBubble.innerHTML = word.emoji + ' ' + word.korean + '!';
+  thoughtBubble.classList.add('visible');
+  speak(word.korean);
+
+  setTimeout(() => {
+    thoughtBubble.classList.remove('visible');
+    decideDefaultState();
+  }, 2500);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HUNGER & HAPPINESS DECAY
+// ═══════════════════════════════════════════════════════════════════
+
+function updateThought() {
+  if (!awake) return;
+  if (currentQuizWord) return;
+  if (gameState === 'discovering' || gameState === 'eating' || gameState === 'sleeping' || gameState === 'waking') return;
+
+  if (hunger < 40) {
+    startQuiz(false);
+  } else if (happiness < 40 && gameState === 'bored') {
+    const msg = randomPhrase('bored');
+    thoughtBubble.textContent = msg;
+    thoughtBubble.classList.add('visible');
+    speak(msg.replace('...', ''));
+  } else {
+    thoughtBubble.classList.remove('visible');
+  }
+}
+
+setInterval(() => {
+  if (!awake) return;
+
+  const wasHungerOk = hunger >= 40;
+  const wasHappinessOk = happiness >= 40;
+
+  const hungerRate = dailyGoalMet ? HUNGER_PER_TICK * 0.5 : HUNGER_PER_TICK;
+  const happinessRate = dailyGoalMet ? HAPPINESS_PER_TICK * 0.5 : HAPPINESS_PER_TICK;
+
+  hunger = Math.max(0, hunger - hungerRate);
+  happiness = Math.max(0, happiness - happinessRate);
+
+  updateStatus();
+
+  // Update emotional state based on needs
+  if (!currentQuizWord && gameState === 'idle') {
+    setEmotionalState(mapGameStateToEmotion());
+  }
+
+  updateThought();
+
+  if (wasHungerOk && hunger < 40 && (gameState === 'idle' || gameState === 'bored')) {
+    enterState('hungry');
+  } else if (wasHappinessOk && happiness < 40 && gameState === 'idle') {
+    enterState('bored');
+  }
+}, TICK_INTERVAL);
+
+// ═══════════════════════════════════════════════════════════════════
+// QUIZ SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+function pickQuizWord() {
+  const unlocked = getUnlockedWords();
+  const now = Date.now();
+
+  const reviewDue = [];
+  const newWords = [];
+  unlocked.forEach(w => {
+    const s = getStats(w.korean);
+    if (s.correctCount === 0) {
+      newWords.push(w);
+    } else if (now - s.lastSeen > s.interval) {
+      reviewDue.push(w);
+    }
+  });
+
+  let pool;
+  if (reviewDue.length > 0 && newWords.length > 0) {
+    pool = Math.random() < 0.6 ? reviewDue : newWords;
+  } else if (reviewDue.length > 0) {
+    pool = reviewDue;
+  } else if (newWords.length > 0) {
+    pool = newWords;
+  } else {
+    pool = unlocked;
+  }
+
+  const weights = pool.map(w => {
+    const s = getStats(w.korean);
+    return Math.max(1, 6 - s.correctStreak);
+  });
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * totalWeight;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+function pickDistractors(correct, count) {
+  const unlocked = getUnlockedWords().filter(w => w.emoji !== correct.emoji);
+  const sameCategory = unlocked.filter(w => w.category === correct.category);
+  const shuffledSame = [...sameCategory].sort(() => Math.random() - 0.5);
+  const shuffledOther = [...unlocked.filter(w => w.category !== correct.category)].sort(() => Math.random() - 0.5);
+  const pool = [...shuffledSame, ...shuffledOther];
+  return pool.slice(0, count);
+}
+
+function buildFoodMenu() {
+  foodMenu.innerHTML = '';
+  if (!currentQuizWord) return;
+
+  const distractors = pickDistractors(currentQuizWord, 2);
+  const options = [currentQuizWord, ...distractors].sort(() => Math.random() - 0.5);
+
+  options.forEach(word => {
+    const btn = document.createElement('button');
+    btn.className = 'food-option';
+
+    if (isReverseQuiz) {
+      btn.classList.add('text-option');
+      btn.textContent = word.korean;
+    } else {
+      btn.innerHTML = word.emoji;
+    }
+
+    btn.dataset.emoji = word.emoji;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleAnswer(word, btn);
+    });
+    foodMenu.appendChild(btn);
+  });
+}
+
+function openFoodMenu() {
+  foodMenuOpen = true;
+  buildFoodMenu();
+  foodMenu.classList.add('visible');
+}
+
+function closeFoodMenu() {
+  foodMenuOpen = false;
+  foodMenu.classList.remove('visible');
+  foodMenu.innerHTML = '';
+}
+
+function startQuiz(playerInitiated = false) {
+  currentQuizWord = pickQuizWord();
+  isReverseQuiz = false;
+  isPhraseQuiz = false;
+  phraseAdjective = null;
+  isPlayerInitiated = playerInitiated;
+
+  setEmotionalState('playing');
+
+  const stats = getStats(currentQuizWord.korean);
+
+  // Phrase challenge
+  if (stats.correctCount >= 5 && currentQuizWord.category !== 'actions' && Math.random() < 0.2) {
+    isPhraseQuiz = true;
+    phraseAdjective = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const phrase = phraseAdjective.korean + ' ' + currentQuizWord.korean + ' 주세요!';
+    thoughtBubble.textContent = phrase;
+    thoughtBubble.classList.add('visible');
+    speak(phrase);
+    openFoodMenu();
+    return;
+  }
+
+  // Reverse quiz
+  const reverseEligible = getUnlockedWords().filter(w => getStats(w.korean).correctCount >= 3);
+  if (reverseEligible.length >= 3 && stats.correctCount >= 3 && Math.random() < 0.3) {
+    isReverseQuiz = true;
+    thoughtBubble.innerHTML = currentQuizWord.emoji;
+    thoughtBubble.style.fontSize = '36px';
+    thoughtBubble.classList.add('visible');
+    speak(currentQuizWord.korean);
+    openFoodMenu();
+    return;
+  }
+
+  // Normal quiz
+  let requestText;
+  if (playerInitiated) {
+    requestText = currentQuizWord.korean + ' 줄까?';
+  } else if (happiness < 40) {
+    requestText = '놀자! ' + currentQuizWord.korean + '?';
+  } else {
+    requestText = currentQuizWord.korean + ' 주세요!';
+  }
+  thoughtBubble.textContent = requestText;
+  thoughtBubble.style.fontSize = '';
+  thoughtBubble.classList.add('visible');
+  speak(requestText);
+  openFoodMenu();
+}
+
+function handleAnswer(chosen, btn) {
+  const isCorrect = chosen.emoji === currentQuizWord.emoji;
+
+  if (isCorrect) {
+    const prevCats = getUnlockedCategories().map(c => c.id);
+
+    const stats = getStats(currentQuizWord.korean);
+    stats.correctCount++;
+    stats.correctStreak++;
+    stats.lastSeen = Date.now();
+    stats.interval = Math.min(Math.max((stats.interval || 0) * 2 || 30000, 30000), 86400000);
+    streak++;
+
+    session.dailyCorrectCount++;
+    const justMetGoal = !dailyGoalMet && session.dailyCorrectCount >= session.dailyGoal;
+    if (justMetGoal) dailyGoalMet = true;
+
+    const isFirstFeed = !session.firstFeedComplete;
+    if (isFirstFeed) {
+      session.firstFeedComplete = true;
+    }
+
+    saveStats();
+    saveSession();
+
+    const newCats = getUnlockedCategories().map(c => c.id);
+    const newlyUnlocked = CATEGORIES.find(c => newCats.includes(c.id) && !prevCats.includes(c.id));
+
+    closeFoodMenu();
+    thoughtBubble.classList.remove('visible');
+    hunger = 100;
+    happiness = Math.min(100, happiness + 30);
+    enterState('eating');
+
+    // Handle lapsed bird restoration
+    const wasLapsed = returnType === 'lapsed';
+    if (wasLapsed) {
+      returnType = 'restored';
+    }
+
+    setTimeout(() => {
+      if (wasLapsed) {
+        setEmotionalState('excited');
+        showPop('다시 만나서 반가워!', true);
+        updateStatus();
+        updateHUD();
+        setTimeout(() => decideDefaultState(), 2200);
+      } else if (isFirstFeed) {
+        showConfetti();
+        setEmotionalState('excited');
+        thoughtBubble.textContent = '와! 보리 첫 밥이야! 고마워!';
+        thoughtBubble.classList.add('visible');
+        speak('와! 보리 첫 밥이야! 고마워!');
+        updateStatus();
+        updateHUD();
+        setTimeout(() => {
+          thoughtBubble.classList.remove('visible');
+          decideDefaultState();
+        }, 2500);
+      } else if (newlyUnlocked) {
+        setEmotionalState('proud');
+        const preview = newlyUnlocked.words.slice(0, 3).map(w => w.emoji).join('');
+        showPop(newlyUnlocked.name + '! ' + preview);
+        speak(newlyUnlocked.name);
+        updateStatus();
+        updateHUD();
+        setTimeout(() => decideDefaultState(), 2200);
+      } else if (justMetGoal) {
+        setEmotionalState('proud');
+        showPop('잘했어!', true);
+        updateStatus();
+        updateHUD();
+        const hudEl = document.getElementById('hud');
+        if (hudEl) { hudEl.classList.add('goal-pulse'); setTimeout(() => hudEl.classList.remove('goal-pulse'), 2000); }
+        setTimeout(() => decideDefaultState(), 2200);
+      } else {
+        // Normal correct answer
+        let responseText;
+        let doExtraCelebration = false;
+        if (Math.random() < 0.05) {
+          responseText = '와!! 이거 제일 좋아해!!';
+          doExtraCelebration = true;
+          setEmotionalState('excited');
+        } else {
+          responseText = randomPhrase('delicious');
+          setEmotionalState('thanking');
+        }
+
+        thoughtBubble.textContent = responseText;
+        thoughtBubble.classList.add('visible');
+        speak(responseText);
+        updateStatus();
+        updateHUD();
+
+        if (streak >= 3 || doExtraCelebration) {
+          setEmotionalState('excited');
+          streak = 0;
+          setTimeout(() => {
+            thoughtBubble.classList.remove('visible');
+            decideDefaultState();
+          }, 2000);
+        } else {
+          setTimeout(() => {
+            thoughtBubble.classList.remove('visible');
+            decideDefaultState();
+          }, 2000);
+        }
+      }
+    }, 1200); // Eating animation duration
+
+    currentQuizWord = null;
+    isReverseQuiz = false;
+    isPhraseQuiz = false;
+    isPlayerInitiated = false;
+    phraseAdjective = null;
+    thoughtBubble.style.fontSize = '';
+  } else {
+    // Wrong answer
+    btn.classList.add('wrong');
+    setEmotionalState('sad');
+    const stats = getStats(currentQuizWord.korean);
+    stats.correctStreak = 0;
+    stats.lastSeen = Date.now();
+    stats.interval = 30000;
+    saveStats();
+    streak = 0;
+
+    const wrongMsg = randomPhrase('wrongAnswer');
+    if (isPhraseQuiz && phraseAdjective) {
+      const phrase = wrongMsg + ' ' + phraseAdjective.korean + ' ' + currentQuizWord.korean + '!';
+      thoughtBubble.textContent = phrase;
+      speak(phrase);
+    } else {
+      thoughtBubble.textContent = wrongMsg + ' ' + currentQuizWord.korean + '!';
+      speak(currentQuizWord.korean);
+    }
+    thoughtBubble.classList.add('visible');
+
+    // Return to playing state after showing sad
+    setTimeout(() => {
+      setEmotionalState('playing');
+    }, 1800);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+petContainer.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!awake) return;
+  if (gameState === 'flying' || gameState === 'walking' || gameState === 'discovering' || gameState === 'eating') return;
+
+  if (currentQuizWord) {
+    // Quiz is active - toggle food menu
+    if (foodMenuOpen) closeFoodMenu();
+    else openFoodMenu();
+  } else {
+    // No quiz active - just poke reaction (squish)
+    handlePoke(e.clientX, e.clientY);
+
+    // Happiness boost from poke
+    happiness = Math.min(100, happiness + 2);
+    updateStatus();
+  }
+});
+
+thoughtBubble.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (currentQuizWord) {
+    speak(thoughtBubble.textContent);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// SLEEP/WAKE SEQUENCE
+// ═══════════════════════════════════════════════════════════════════
+
+function initSleepState() {
+  sleepOverlay.classList.remove('hidden');
+  setEmotionalState('sleepy');
+  gameState = 'sleeping';
+}
+
+function wakeUp() {
+  sleepOverlay.classList.add('hidden');
+
+  // Unlock audio
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance('.');
+    u.lang = 'ko-KR';
+    u.volume = 0.01;
+    speechSynthesis.speak(u);
+  }
+
+  awake = true;
+  session.awake = true;
+  saveSession();
+
+  // Initialize random quiz timer
+  lastRandomQuizTime = performance.now();
+  const freq = QUIZ_FREQUENCY_INTERVALS[quizFrequency];
+  nextRandomQuizDelay = freq.min + Math.random() * (freq.max - freq.min);
+
+  enterState('waking');
+  setEmotionalState('greeting');
+
+  const greeting = '안녕! 나는 보리야!';
+  thoughtBubble.textContent = greeting;
+  thoughtBubble.classList.add('visible');
+
+  setTimeout(() => {
+    speak(greeting);
+  }, 300);
+
+  setTimeout(() => {
+    thoughtBubble.classList.remove('visible');
+    handleReturnState();
+  }, 2500);
+}
+
+sleepOverlay.addEventListener('click', () => {
+  if (!awake) {
+    wakeUp();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// RETURN STATES
+// ═══════════════════════════════════════════════════════════════════
+
+function handleReturnState() {
+  updateStatus();
+
+  if (returnType === 'lapsed') {
+    setEmotionalState('sad');
+    thoughtBubble.textContent = '...보고 싶었어';
+    thoughtBubble.classList.add('visible');
+    speak('보고 싶었어');
+    setTimeout(() => {
+      thoughtBubble.classList.remove('visible');
+      decideDefaultState();
+    }, 2000);
+  } else if (returnType === 'new-day') {
+    setEmotionalState('excited');
+    const greeting = getTimeGreeting();
+    showPop(greeting, true);
+    setTimeout(() => {
+      decideDefaultState();
+    }, 1500);
+  } else if (returnType === 'same-day') {
+    setEmotionalState('happy');
+    const greeting = randomPhrase('greeting');
+    thoughtBubble.textContent = greeting;
+    thoughtBubble.classList.add('visible');
+    speak(greeting);
+    setTimeout(() => {
+      thoughtBubble.classList.remove('visible');
+      decideDefaultState();
+    }, 1500);
+  } else {
+    decideDefaultState();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEBUG MENU
+// ═══════════════════════════════════════════════════════════════════
+
+(function() {
+  const debugBtn = document.getElementById('hud-debug');
+  const modal = document.getElementById('debug-modal');
+  const levelBtnsContainer = document.getElementById('level-buttons');
+  const emotionBtnsContainer = document.getElementById('emotion-buttons');
+  const quizFrequencyContainer = document.getElementById('quiz-frequency-buttons');
+  const hungerIcons = document.getElementById('hunger-icons');
+  const happinessIcons = document.getElementById('happiness-icons');
+
+  // Build level buttons
+  const levels = [
+    { label: '0', value: 0 },
+    ...CATEGORIES.filter(c => c.unlockAt > 0).map(c => ({ label: c.name, value: c.unlockAt }))
+  ];
+
+  levels.forEach(level => {
+    const btn = document.createElement('button');
+    btn.textContent = level.label;
+    btn.title = 'Set progress to ' + level.value;
+    btn.addEventListener('click', () => {
+      setProgressLevel(level.value);
+      modal.classList.remove('visible');
+    });
+    levelBtnsContainer.appendChild(btn);
+  });
+
+  // Build emotion buttons
+  Object.keys(EMOTIONAL_STATES).forEach(state => {
+    const btn = document.createElement('button');
+    btn.textContent = state;
+    btn.addEventListener('click', () => {
+      setEmotionalState(state);
+    });
+    emotionBtnsContainer.appendChild(btn);
+  });
+
+  // Build quiz frequency buttons
+  const frequencies = ['frequent', 'normal', 'rare', 'off'];
+  frequencies.forEach(freq => {
+    const btn = document.createElement('button');
+    btn.textContent = freq;
+    btn.id = 'quiz-freq-' + freq;
+    if (freq === quizFrequency) btn.style.background = 'rgba(126, 200, 227, 0.3)';
+    btn.addEventListener('click', () => {
+      quizFrequency = freq;
+      // Update button styles
+      frequencies.forEach(f => {
+        const b = document.getElementById('quiz-freq-' + f);
+        b.style.background = f === freq ? 'rgba(126, 200, 227, 0.3)' : '';
+      });
+      // Reset quiz timer
+      lastRandomQuizTime = performance.now();
+      const freqConfig = QUIZ_FREQUENCY_INTERVALS[freq];
+      nextRandomQuizDelay = freqConfig.min + Math.random() * (freqConfig.max - freqConfig.min);
+    });
+    quizFrequencyContainer.appendChild(btn);
+  });
+
+  function updateDebugIcons() {
+    const hungerLevel = Math.ceil(hunger / 20);
+    const happinessLevel = Math.ceil(happiness / 20);
+    hungerIcons.querySelectorAll('.stat-icon').forEach((icon, i) => {
+      icon.classList.remove('hover-fill', 'hover-unfill');
+      icon.classList.toggle('filled', i < hungerLevel);
+    });
+    happinessIcons.querySelectorAll('.stat-icon').forEach((icon, i) => {
+      icon.classList.remove('hover-fill', 'hover-unfill');
+      icon.classList.toggle('filled', i < happinessLevel);
+    });
+  }
+
+  function setupStatIcons(container, setStat) {
+    const icons = container.querySelectorAll('.stat-icon');
+
+    icons.forEach((icon, index) => {
+      icon.addEventListener('mouseenter', () => {
+        icons.forEach((ic, i) => {
+          ic.classList.toggle('hover-fill', i <= index);
+          ic.classList.toggle('hover-unfill', i > index);
+        });
+      });
+
+      icon.addEventListener('click', () => {
+        setStat(parseInt(icon.dataset.value));
+        updateStatus();
+        if (awake && !currentQuizWord && gameState !== 'discovering') {
+          decideDefaultState();
+          updateThought();
+        }
+        modal.classList.remove('visible');
+      });
+    });
+
+    container.addEventListener('mouseleave', () => {
+      updateDebugIcons();
+    });
+  }
+
+  setupStatIcons(hungerIcons, (val) => { hunger = val; });
+  setupStatIcons(happinessIcons, (val) => { happiness = val; });
+
+  document.getElementById('debug-discovery').addEventListener('click', () => {
+    if (!awake) return;
+    modal.classList.remove('visible');
+    closeFoodMenu();
+    currentQuizWord = null;
+    thoughtBubble.classList.remove('visible');
+    doDiscovery();
+  });
+
+  document.getElementById('debug-hunger-quiz').addEventListener('click', () => {
+    if (!awake) return;
+    modal.classList.remove('visible');
+    hunger = 30;
+    happiness = 100;
+    updateStatus();
+    enterState('hungry');
+    startQuiz(false);
+  });
+
+  document.getElementById('debug-bored-quiz').addEventListener('click', () => {
+    if (!awake) return;
+    modal.classList.remove('visible');
+    hunger = 100;
+    happiness = 30;
+    updateStatus();
+    enterState('bored');
+    startQuiz(false);
+  });
+
+  document.getElementById('debug-random-quiz').addEventListener('click', () => {
+    if (!awake) return;
+    modal.classList.remove('visible');
+    closeFoodMenu();
+    currentQuizWord = null;
+    thoughtBubble.classList.remove('visible');
+    triggerRandomQuiz();
+  });
+
+  document.getElementById('debug-squish').addEventListener('click', () => {
+    if (!awake) return;
+    // Test squish physics with random direction
+    const angle = Math.random() * Math.PI * 2;
+    const strength = 0.4;
+    bodyScaleX.impulse(-Math.cos(angle) * strength);
+    bodyScaleY.impulse(-Math.sin(angle) * strength);
+    bodyOffX.impulse(Math.cos(angle) * 8);
+    bodyOffY.impulse(Math.sin(angle) * 5);
+  });
+
+  document.getElementById('debug-wander').addEventListener('click', () => {
+    if (!awake) return;
+    modal.classList.remove('visible');
+    // Force start wandering
+    wanderState = 'curious';
+    wanderStateStartTime = performance.now();
+  });
+
+  function setProgressLevel(targetTotal) {
+    let remaining = targetTotal;
+    wordStats = {};
+
+    for (let i = 0; i < WORDS.length && remaining > 0; i++) {
+      const count = Math.min(remaining, 5);
+      wordStats[WORDS[i].korean] = {
+        correctCount: count,
+        correctStreak: count,
+        lastSeen: Date.now(),
+        interval: 30000
+      };
+      remaining -= count;
+    }
+
+    saveStats();
+    updateHUD();
+  }
+
+  debugBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    updateDebugIcons();
+    modal.classList.add('visible');
+  });
+
+  document.getElementById('debug-reset').addEventListener('click', () => {
+    if (confirm('Reset all progress data?')) {
+      localStorage.removeItem('koreanTamaStats');
+      localStorage.removeItem('koreanTamaSession');
+      location.reload();
+    }
+  });
+
+  document.getElementById('debug-close').addEventListener('click', () => {
+    modal.classList.remove('visible');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════
+
+function animationLoop() {
+  animationTime++;
+  updateTransition();
+
+  // Update idle animations (breathing, blinking, looking around)
+  updateIdleAnimations();
+
+  // Update wandering behavior
+  updateWandering();
+
+  // Check for random quiz trigger
+  updateRandomQuizTrigger();
+
+  // Render main pet
+  renderCharacter(petSvg);
+
+  // Render sleep overlay pet (always sleepy)
+  if (!sleepOverlay.classList.contains('hidden')) {
+    renderCharacter(sleepPetSvg, true);
+  }
+
+  requestAnimationFrame(animationLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════
+
+loadStats();
+loadSession();
+
+dailyGoalMet = session.dailyCorrectCount >= session.dailyGoal;
+updateHUD();
+
+if (awake) {
+  sleepOverlay.classList.add('hidden');
+  // Initialize random quiz timer for returning users
+  lastRandomQuizTime = performance.now();
+  const freq = QUIZ_FREQUENCY_INTERVALS[quizFrequency];
+  nextRandomQuizDelay = freq.min + Math.random() * (freq.max - freq.min);
+  handleReturnState();
+} else {
+  initSleepState();
+}
+
+// Start animation loop
+requestAnimationFrame(animationLoop);
+</script>
+</body>
+</html>
