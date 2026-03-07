@@ -9,7 +9,8 @@ export type EmotionalStateName =
   | 'sad'
   | 'excited'
   | 'proud'
-  | 'thanking';
+  | 'thanking'
+  | 'annoyed';
 
 export type MouthType =
   | 'smile'
@@ -22,7 +23,8 @@ export type MouthType =
   | 'wavy'
   | 'pant'
   | 'smirk'
-  | 'munch';
+  | 'munch'
+  | 'pout';
 
 export type AnimationType =
   | 'bounce'

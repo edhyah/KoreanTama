@@ -23,7 +23,7 @@ export interface PetSvgProps {
   pupilOffsetX: number;
   pupilOffsetY: number;
   blinkLidAdjustment: number;
-  pokeReactionType: 'surprised' | 'happy' | null;
+  pokeReactionType: 'surprised' | 'happy' | 'annoyed' | null;
 }
 
 export function PetSvg({
@@ -53,18 +53,26 @@ export function PetSvg({
     let sx = baseScaleX * bodyScaleX;
     let sy = baseScaleY * bodyScaleY;
 
-    // Apply blink animation to lid
+    // Apply blink animation to lid (will add reaction adjustment later)
     let lidTop = Math.max(baseLidTop, blinkLidAdjustment);
 
-    // Poke reaction overrides
+    // Poke/squish reaction overrides
     let mouth = baseMouth;
     let blush = baseBlush;
+    let reactionLidAdjust = 0;
     if (pokeReactionType === 'surprised') {
       mouth = 'openSmall';
     } else if (pokeReactionType === 'happy') {
       mouth = 'smile';
       blush = true;
+    } else if (pokeReactionType === 'annoyed') {
+      mouth = 'pout';
+      blush = false;
+      reactionLidAdjust = 0.25; // Slightly squint eyes when annoyed
     }
+
+    // Apply reaction lid adjustment
+    lidTop = Math.max(lidTop, reactionLidAdjust);
 
     // Animation offsets from emotional state animation
     const sec = animationTime / 60;
@@ -151,6 +159,18 @@ export function PetSvg({
     svg += getMouthPath(mouth, 100, eyeCY + eyeH / 2 + 10, munchPhase);
 
     svg += `</g>`;
+
+    // Sleeping ZZZ - show when mouth is yawn (sleepy state)
+    if (mouth === 'yawn') {
+      const zOffset = Math.sin(sec * 1.5) * 2;
+      const zBaseX = 135 + animOffX;
+      const zBaseY = 65 + animOffY + offY;
+      svg += `<g fill="#4A4A5A" font-family="sans-serif" font-weight="bold">`;
+      svg += `<text x="${zBaseX}" y="${zBaseY + zOffset}" font-size="12" opacity="0.9">z</text>`;
+      svg += `<text x="${zBaseX + 10}" y="${zBaseY - 8 + zOffset * 0.7}" font-size="10" opacity="0.7">z</text>`;
+      svg += `<text x="${zBaseX + 18}" y="${zBaseY - 14 + zOffset * 0.5}" font-size="8" opacity="0.5">z</text>`;
+      svg += `</g>`;
+    }
 
     return svg;
   }, [

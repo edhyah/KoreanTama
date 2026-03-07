@@ -332,20 +332,10 @@ export default function App() {
     if (!gameState.awake) return;
     if (['flying', 'walking', 'discovering', 'eating'].includes(gameState.gameState)) return;
 
-    if (quiz.quizState.currentWord) {
-      // Toggle food menu
-      if (gameState.foodMenuOpen) {
-        gameActions.setFoodMenuOpen(false);
-      } else {
-        setQuizOptions(quiz.getQuizOptions());
-        gameActions.setFoodMenuOpen(true);
-      }
-    } else {
-      // Poke reaction
-      petRef.current?.handlePoke(e.clientX, e.clientY);
-      gameActions.boostHappiness(2);
-    }
-  }, [gameState.awake, gameState.gameState, gameState.foodMenuOpen, quiz, gameActions]);
+    // Poke reaction
+    petRef.current?.handlePoke(e.clientX, e.clientY);
+    gameActions.boostHappiness(2);
+  }, [gameState.awake, gameState.gameState, gameActions]);
 
   const handleThoughtBubbleClick = useCallback(() => {
     if (quiz.quizState.currentWord) {
@@ -429,7 +419,12 @@ export default function App() {
         setWanderPosition(target);
         petRef.current?.setWanderTarget(target.x, target.y);
         if (target.x !== 0 || target.y !== 0) {
-          petRef.current?.setLookTarget(target.x > 0 ? 4 : -4, -2);
+          // Eyes look in direction of movement, scaled to actual distance
+          // Horizontal: scale by distance, max ~6 for wide looks
+          const lookX = Math.sign(target.x) * Math.min(Math.abs(target.x) * 0.15, 6);
+          // Vertical: slight upward look when moving, varies with horizontal
+          const lookY = -1.5 + Math.sin(target.x * 0.1) * 1.5;
+          petRef.current?.setLookTarget(lookX, lookY);
         } else {
           petRef.current?.resetLookTarget();
         }

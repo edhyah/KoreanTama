@@ -34,9 +34,14 @@ export const Pet = forwardRef<PetRef, PetProps>(({
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const animationTimeRef = useRef(0);
-  const pokeReactionRef = useRef<{ type: 'surprised' | 'happy' | null; timeout: number | null }>({
+  const pokeReactionRef = useRef<{ type: 'surprised' | 'happy' | 'annoyed' | null; timeout: number | null }>({
     type: null,
     timeout: null,
+  });
+  const tapTrackingRef = useRef<{ count: number; lastTapTime: number; resetTimeout: number | null }>({
+    count: 0,
+    lastTapTime: 0,
+    resetTimeout: null,
   });
   const frameRef = useRef<number>(undefined);
 
@@ -87,6 +92,42 @@ export const Pet = forwardRef<PetRef, PetProps>(({
       const rect = containerRef.current.getBoundingClientRect();
       const petCenterX = rect.left + rect.width / 2;
       const petCenterY = rect.top + rect.height / 2;
+
+      // Track taps within 5 second window
+      const now = performance.now();
+      const tapTracking = tapTrackingRef.current;
+
+      // If tapped within 5 seconds of last tap, increment counter
+      if (now - tapTracking.lastTapTime < 5000) {
+        tapTracking.count++;
+      } else {
+        tapTracking.count = 1;
+      }
+      tapTracking.lastTapTime = now;
+
+      // Clear existing reset timeout
+      if (tapTracking.resetTimeout) {
+        clearTimeout(tapTracking.resetTimeout);
+      }
+      // Reset tap count after 5 seconds of no tapping
+      tapTracking.resetTimeout = window.setTimeout(() => {
+        tapTracking.count = 0;
+      }, 5000);
+
+      // If tapped more than 2 times within 5 seconds, get annoyed
+      if (tapTracking.count > 2) {
+        physics.applySquish();
+        pokeReactionRef.current.type = 'annoyed';
+        if (pokeReactionRef.current.timeout) {
+          clearTimeout(pokeReactionRef.current.timeout);
+        }
+        pokeReactionRef.current.timeout = window.setTimeout(() => {
+          pokeReactionRef.current.type = null;
+        }, 800);
+        return;
+      }
+
+      // Normal poke behavior
       physics.applyPoke(touchX, touchY, petCenterX, petCenterY);
 
       // Show brief reaction
@@ -107,7 +148,20 @@ export const Pet = forwardRef<PetRef, PetProps>(({
         pokeReactionRef.current.type = null;
       }, 600);
     },
-    applySquish: physics.applySquish,
+    applySquish: () => {
+      physics.applySquish();
+
+      // Show annoyed reaction when squished
+      pokeReactionRef.current.type = 'annoyed';
+      if (pokeReactionRef.current.timeout) {
+        clearTimeout(pokeReactionRef.current.timeout);
+      }
+
+      // Clear reaction after animation
+      pokeReactionRef.current.timeout = window.setTimeout(() => {
+        pokeReactionRef.current.type = null;
+      }, 800);
+    },
     setWanderTarget: physics.setWanderTarget,
     resetWander: physics.resetWander,
     setLookTarget: idleAnimations.setLookTarget,

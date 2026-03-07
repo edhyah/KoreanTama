@@ -31,6 +31,9 @@ export function getMouthPath(type: MouthType, cx: number, cy: number, munchPhase
       } else {
         return `<path d="M${cx - 10},${cy} Q${cx},${cy + 10} ${cx + 10},${cy}" fill="none" stroke="${dark}" stroke-width="2.2" stroke-linecap="round"/>`;
       }
+    case 'pout':
+      // Small pouty/annoyed mouth - rounded squished shape
+      return `<ellipse cx="${cx}" cy="${cy + 2}" rx="6" ry="4" fill="${dark}"/>`;
     default:
       return `<path d="M${cx - 8},${cy} Q${cx},${cy + 8} ${cx + 8},${cy}" fill="none" stroke="${dark}" stroke-width="2" stroke-linecap="round"/>`;
   }
