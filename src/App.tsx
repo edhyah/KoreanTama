@@ -11,12 +11,15 @@ import {
   Confetti,
   useConfetti,
   DebugModal,
+  DebugPage,
   markButtonWrong,
 } from './components';
 import { usePersistence, useGameState, useQuiz } from './hooks';
 import { speak, unlockAudio } from './utils';
 import { randomPhrase, getTimeGreeting, CATEGORIES } from './constants';
 import type { Word } from './types';
+
+type PageName = 'main' | 'debug';
 
 export default function App() {
   const persistence = usePersistence();
@@ -58,6 +61,29 @@ export default function App() {
   const [goalPulse, setGoalPulse] = useState(false);
   const [animationTime, setAnimationTime] = useState(0);
   const [wanderPosition, setWanderPosition] = useState({ x: 0, y: 0 });
+
+  // Debug page state
+  const [currentPage, setCurrentPage] = useState<PageName>(() => {
+    // Check URL for ?debug=true
+    const params = new URLSearchParams(window.location.search);
+    return params.get('debug') === 'true' ? 'debug' : 'main';
+  });
+
+  // Keyboard shortcut for debug page
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'd' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Don't trigger if user is typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          return;
+        }
+        setCurrentPage(prev => prev === 'debug' ? 'main' : 'debug');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Animation time for sleep overlay
   useEffect(() => {
@@ -478,6 +504,11 @@ export default function App() {
     return null;
   }
 
+  // Render debug page
+  if (currentPage === 'debug') {
+    return <DebugPage onClose={() => setCurrentPage('main')} />;
+  }
+
   const creatureZoneStyle = wanderPosition.x !== 0 || wanderPosition.y !== 0
     ? { transform: `translate(calc(-50% + ${wanderPosition.x}px), calc(-50% + ${wanderPosition.y}px))` }
     : undefined;
@@ -572,6 +603,7 @@ export default function App() {
         onTestSquish={() => petRef.current?.applySquish()}
         onForceWander={() => gameActions.startWandering()}
         onReset={resetAll}
+        onOpenDebugPage={() => setCurrentPage('debug')}
       />
     </div>
   );

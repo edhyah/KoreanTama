@@ -408,3 +408,324 @@ body {
 .debug-modal .stat-icon.filled { opacity: 1; }
 .debug-modal .stat-icon.hover-fill { opacity: 1; }
 .debug-modal .stat-icon.hover-unfill { opacity: 0.3; }
+
+/* Debug Page */
+.debug-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.debug-page-scroll {
+  width: 100%;
+  height: 100%;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: 20px;
+  padding-bottom: 60px;
+}
+
+.debug-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-page-header h1 {
+  font-size: 20px;
+  font-weight: normal;
+  color: #fff;
+  margin: 0;
+}
+
+.debug-page-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-family: 'DotGothic16', monospace;
+  font-size: 13px;
+  color: #b0b8d1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.debug-page-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.debug-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.debug-tab {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-family: 'DotGothic16', monospace;
+  font-size: 13px;
+  color: #b0b8d1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.debug-tab:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.debug-tab.active {
+  background: rgba(126, 200, 227, 0.3);
+  border-color: rgba(126, 200, 227, 0.5);
+  color: #fff;
+}
+
+.debug-tab-content {
+  min-height: 400px;
+  padding-bottom: 40px;
+}
+
+/* Emotions Grid Tab */
+.debug-emotions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.debug-emotion-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-emotion-info {
+  text-align: center;
+  width: 100%;
+}
+
+.debug-emotion-name {
+  font-size: 12px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.debug-emotion-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #888;
+}
+
+.debug-color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Animation Sandbox Tab */
+.debug-sandbox {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.debug-sandbox-pet {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  min-width: 340px;
+  min-height: 340px;
+}
+
+.debug-sandbox-controls {
+  flex: 1;
+  min-width: 280px;
+  max-width: 500px;
+}
+
+.debug-control-section {
+  margin-bottom: 16px;
+}
+
+.debug-control-label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.debug-preset-buttons,
+.debug-option-buttons,
+.debug-emotion-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.debug-preset-btn,
+.debug-option-btn,
+.debug-emotion-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: 'DotGothic16', monospace;
+  font-size: 11px;
+  color: #b0b8d1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.debug-preset-btn:hover,
+.debug-option-btn:hover,
+.debug-emotion-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.debug-option-btn.active,
+.debug-emotion-btn.active {
+  background: rgba(126, 200, 227, 0.3);
+  border-color: rgba(126, 200, 227, 0.5);
+  color: #fff;
+}
+
+.debug-color-input {
+  width: 60px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.debug-slider {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.debug-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #7EC8E3;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.debug-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #7EC8E3;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+/* Reaction Tester Tab */
+.debug-reaction-tester {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.debug-reaction-pet {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 40px;
+}
+
+.debug-reaction-controls {
+  flex: 1;
+  min-width: 280px;
+}
+
+.debug-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.debug-action-btn {
+  background: rgba(255, 200, 100, 0.2);
+  border: 1px solid rgba(255, 200, 100, 0.3);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-family: 'DotGothic16', monospace;
+  font-size: 14px;
+  color: #FFD166;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.debug-action-btn:hover {
+  background: rgba(255, 200, 100, 0.3);
+}
+
+.debug-action-btn:active {
+  transform: scale(0.95);
+}
+
+.debug-look-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  max-width: 150px;
+}
+
+.debug-look-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: 'DotGothic16', monospace;
+  font-size: 11px;
+  color: #b0b8d1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.debug-look-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.debug-current-emotion {
+  color: #7EC8E3;
+  font-weight: bold;
+}

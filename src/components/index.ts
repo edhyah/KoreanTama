@@ -8,3 +8,5 @@ export { SleepOverlay } from './SleepOverlay';
 export { PopText } from './PopText';
 export { Confetti, useConfetti } from './Confetti';
 export { DebugModal } from './DebugModal';
+export { DebugPet } from './DebugPet';
+export { DebugPage } from './DebugPage';

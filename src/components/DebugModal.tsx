@@ -20,6 +20,7 @@ interface DebugModalProps {
   onTestSquish: () => void;
   onForceWander: () => void;
   onReset: () => void;
+  onOpenDebugPage?: () => void;
 }
 
 export function DebugModal({
@@ -40,6 +41,7 @@ export function DebugModal({
   onTestSquish,
   onForceWander,
   onReset,
+  onOpenDebugPage,
 }: DebugModalProps) {
   const [hoverHunger, setHoverHunger] = useState<number | null>(null);
   const [hoverHappiness, setHoverHappiness] = useState<number | null>(null);
@@ -182,6 +184,14 @@ export function DebugModal({
           Reset All Data
         </button>
       </div>
+
+      {onOpenDebugPage && (
+        <div className="debug-section">
+          <button onClick={() => { onOpenDebugPage(); onClose(); }}>
+            Open Debug Page
+          </button>
+        </div>
+      )}
 
       <button onClick={onClose}>Close</button>
     </div>
