@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import type { EmotionalStateName } from '../types';
 import { EMOTIONAL_STATES, TRANSITION_DURATION } from '../constants';
-import { lerp, lerpColor } from '../utils';
+import { lerp, lerpColor, modulateColorByNeeds, type Needs } from '../utils';
 
 export interface InterpolatedEmotionalState {
   color: string;
@@ -17,13 +17,17 @@ export interface InterpolatedEmotionalState {
   anim: string;
 }
 
-export function useEmotionalState(initialState: EmotionalStateName = 'sleepy') {
+export function useEmotionalState(
+  initialState: EmotionalStateName = 'sleepy',
+  needs?: Needs
+) {
   const [currentState, setCurrentState] = useState<EmotionalStateName>(initialState);
   const [prevState, setPrevState] = useState<EmotionalStateName>(initialState);
   const transitionRef = useRef({
     progress: 1,
     startTime: 0,
   });
+  const needsRef = useRef<Needs | undefined>(needs);
 
   const setEmotionalState = useCallback((newState: EmotionalStateName) => {
     setCurrentState(current => {
@@ -44,13 +48,24 @@ export function useEmotionalState(initialState: EmotionalStateName = 'sleepy') {
     return transitionRef.current.progress;
   }, []);
 
+  // Keep needs ref in sync
+  needsRef.current = needs;
+
   const getInterpolatedState = useCallback((forceSleepy: boolean = false): InterpolatedEmotionalState => {
     const t = transitionRef.current.progress;
     const cur = EMOTIONAL_STATES[forceSleepy ? 'sleepy' : currentState];
     const prev = EMOTIONAL_STATES[prevState];
 
+    // Get base interpolated color
+    let color = lerpColor(prev.color, cur.color, t);
+
+    // Apply needs-based modulation if needs are provided
+    if (needsRef.current) {
+      color = modulateColorByNeeds(color, needsRef.current);
+    }
+
     return {
-      color: lerpColor(prev.color, cur.color, t),
+      color,
       scaleX: lerp(prev.scaleX, cur.scaleX, t),
       scaleY: lerp(prev.scaleY, cur.scaleY, t),
       offY: lerp(prev.offY, cur.offY, t),

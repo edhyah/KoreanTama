@@ -61,7 +61,7 @@ export const Pet = forwardRef<PetRef, PetProps>(({
     setEmotionalState,
     updateTransition,
     getInterpolatedState,
-  } = useEmotionalState('sleepy');
+  } = useEmotionalState('sleepy', { hunger, happiness });
 
   const physics = usePetPhysics();
   const idleAnimations = useIdleAnimations();
@@ -188,21 +188,39 @@ export const Pet = forwardRef<PetRef, PetProps>(({
     if (gameState === 'eating') return 'eating';
     if (gameState === 'discovering') return 'playing';
 
-    // Quiz states
-    if (isQuizActive) return 'playing';
+    // Combined needs factor for overall wellbeing
+    const wellbeing = (hunger + happiness) / 2;
 
-    // Needs-based states
-    if (hunger < 40) return 'hungry';
-    if (happiness < 40) return 'bored';
+    // Quiz states - still affected by needs
+    if (isQuizActive) {
+      if (wellbeing < 40) return 'sad';
+      if (wellbeing < 60) return 'bored';
+      return 'playing';
+    }
 
-    // Default idle states based on overall happiness
-    if (happiness >= 80) return 'happy';
-    return 'happy';
+    // Critical needs - show specific need state
+    if (hunger < 30) return 'hungry';
+    if (happiness < 30) return 'bored';
+
+    // Low needs - sad expression
+    if (wellbeing < 40) return 'sad';
+
+    // Medium-low needs - bored/neutral
+    if (wellbeing < 55) return 'bored';
+
+    // Medium needs - sleepy/neutral (not unhappy, not happy)
+    if (wellbeing < 70) return 'sleepy';
+
+    // Good needs - happy
+    if (wellbeing < 85) return 'happy';
+
+    // Excellent needs - excited
+    return 'excited';
   }, [gameState, isQuizActive, hunger, happiness]);
 
-  // Update emotional state based on game state
+  // Update emotional state based on game state and needs
   useEffect(() => {
-    if (!isQuizActive && gameState === 'idle') {
+    if (gameState === 'idle' || isQuizActive) {
       setEmotionalState(mapGameStateToEmotion());
     }
   }, [gameState, isQuizActive, hunger, happiness, mapGameStateToEmotion, setEmotionalState]);
