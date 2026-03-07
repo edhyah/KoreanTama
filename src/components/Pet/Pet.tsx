@@ -1,8 +1,8 @@
-import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { PetSvg } from './PetSvg';
 import { usePetPhysics } from './usePetPhysics';
-import { useEmotionalState, useIdleAnimations } from '../../hooks';
-import type { EmotionalStateName, GameStateName, MouthType } from '../../types';
+import { useEmotionalState, useIdleAnimations, useSpatialZones } from '../../hooks';
+import type { EmotionalStateName, GameStateName, MouthType, BehaviorConfidence } from '../../types';
 import type { BlinkType, IdleBehaviorType, ExplorationBehavior } from '../../hooks/useIdleAnimations';
 
 export interface PetRef {
@@ -14,7 +14,7 @@ export interface PetRef {
   setLookTarget: (x: number, y: number) => void;
   resetLookTarget: () => void;
   getCurrentEmotionalState: () => EmotionalStateName;
-  // New behavior triggers
+  // Behavior triggers
   triggerBlink: (type: BlinkType) => void;
   triggerSigh: () => void;
   triggerBehavior: (type: IdleBehaviorType) => void;
@@ -65,6 +65,12 @@ export const Pet = forwardRef<PetRef, PetProps>(({
 
   const physics = usePetPhysics();
   const idleAnimations = useIdleAnimations();
+  const spatialZones = useSpatialZones();
+
+  // Calculate confidence based on hunger and happiness
+  const confidence = useMemo<BehaviorConfidence>(() => {
+    return spatialZones.calculateConfidence(hunger, happiness);
+  }, [hunger, happiness, spatialZones]);
 
   // Handle clicks on the pet container
   const handleClick = useCallback((e: React.MouseEvent) => {
@@ -293,8 +299,8 @@ export const Pet = forwardRef<PetRef, PetProps>(({
       // Update idle behaviors (yawn, twitch, daydream)
       const idleBehavior = idleAnimations.updateIdleBehaviors(now, isIdle);
 
-      // Update exploration behaviors
-      const exploration = idleAnimations.updateExploration(now, isIdle);
+      // Update exploration behaviors with confidence modulation
+      const exploration = idleAnimations.updateExploration(now, isIdle, confidence);
 
       // Apply breathing to body scale when idle
       if (isIdle) {
@@ -313,21 +319,63 @@ export const Pet = forwardRef<PetRef, PetProps>(({
 
       // Handle exploration physics and wander
       if (exploration.behavior && exploration.phase) {
+        const behaviorType = exploration.behavior.type;
+
         // Apply edge press for edge behaviors
-        if (exploration.behavior.type === 'edgePeer' && exploration.phase === 'active') {
+        if (behaviorType === 'edgePeer' && exploration.phase === 'active') {
+          physics.setEdgePress(exploration.behavior.edge as 'left' | 'right');
+        } else if (behaviorType === 'wallClimb' && exploration.phase === 'active') {
+          // Slight edge press during wall climb
           physics.setEdgePress(exploration.behavior.edge as 'left' | 'right');
         } else {
           physics.setEdgePress(null);
         }
 
         // Apply startle physics
-        if (exploration.behavior.type === 'startle' && exploration.phase === 'starting' && exploration.progress < 0.1) {
+        if (behaviorType === 'startle' && exploration.phase === 'starting' && exploration.progress < 0.1) {
           physics.applyStartle();
         }
 
         // Apply reaching stretch
-        if (exploration.behavior.type === 'reaching' && exploration.phase === 'active' && exploration.progress < 0.1) {
+        if (behaviorType === 'reaching' && exploration.phase === 'active' && exploration.progress < 0.1) {
           physics.applyStretch(0.1);
+        }
+
+        // Wall bounce physics - bounce back when hitting wall
+        if (behaviorType === 'wallBounce' && exploration.phase === 'active' && exploration.progress < 0.2) {
+          // Apply bounce-back impulse
+          const bounceDir = exploration.behavior.edge === 'left' ? 1 :
+                           exploration.behavior.edge === 'right' ? -1 : 0;
+          const bounceVertical = exploration.behavior.edge === 'top' ? 1 :
+                                 exploration.behavior.edge === 'bottom' ? -1 : 0;
+
+          if (!containerRef.current) {
+            physics.applySquish();
+          } else {
+            const rect = containerRef.current.getBoundingClientRect();
+            physics.applyPoke(
+              rect.left + rect.width / 2 - bounceDir * 50,
+              rect.top + rect.height / 2 - bounceVertical * 50,
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2
+            );
+          }
+        }
+
+        // Corner hide - scale down when tucked
+        if (behaviorType === 'cornerHide' && exploration.phase === 'active') {
+          physics.setBreathingTarget(0.92, 0.92);
+        }
+
+        // Wall climb - small vertical oscillation for climbing effect
+        if (behaviorType === 'wallClimb' && exploration.phase === 'active') {
+          const climbOscillation = Math.sin(exploration.progress * Math.PI * 6) * 0.02;
+          physics.setBreathingTarget(1 + climbOscillation * 0.5, 1 - climbOscillation);
+        }
+
+        // Screen tap - subtle movement toward target
+        if (behaviorType === 'screenTap' && exploration.phase === 'active') {
+          physics.applyStretch(0.02);
         }
 
         // Set wander target from exploration
@@ -364,7 +412,7 @@ export const Pet = forwardRef<PetRef, PetProps>(({
         cancelAnimationFrame(frameRef.current);
       }
     };
-  }, [gameState, isQuizActive, physics, updateTransition, idleAnimations]);
+  }, [gameState, isQuizActive, physics, updateTransition, idleAnimations, confidence]);
 
   // Get current interpolated state
   const interpolatedState = getInterpolatedState(forceSleepy);
@@ -375,7 +423,7 @@ export const Pet = forwardRef<PetRef, PetProps>(({
   const now = performance.now();
   const isIdle = gameState === 'idle' && !isQuizActive;
   const idleBehavior = idleAnimations.updateIdleBehaviors(now, isIdle);
-  const exploration = idleAnimations.updateExploration(now, isIdle);
+  const exploration = idleAnimations.updateExploration(now, isIdle, confidence);
   const animState = idleAnimations.getState();
 
   // Get mouth fidget override (only when truly idle)
@@ -412,12 +460,10 @@ export const Pet = forwardRef<PetRef, PetProps>(({
         pupilOffsetY={physicsValues.pupilOffsetY}
         blinkLidAdjustment={blinkLid}
         pokeReactionType={pokeReactionRef.current.type}
-        // New physics values
         edgePressX={physicsValues.edgePressX}
         stretchY={physicsValues.stretchY}
         wanderX={physicsValues.wanderX}
         wanderY={physicsValues.wanderY}
-        // Behavior state for visual modifications
         idleBehavior={idleBehavior.behavior}
         idleBehaviorProgress={idleBehavior.progress}
         explorationBehavior={exploration.behavior?.type || null}

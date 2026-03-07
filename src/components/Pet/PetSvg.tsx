@@ -81,13 +81,12 @@ export function PetSvg({
     // Apply edge press (horizontal squish)
     if (edgePressX !== 0) {
       sx += Math.abs(edgePressX) * 0.1; // Slightly wider when pressed
-      // Asymmetric squish effect handled by path adjustment below
     }
 
     // Apply stretch (vertical elongation for yawn/reach)
     sy += stretchY;
 
-    // Apply blink animation to lid (will add reaction adjustment later)
+    // Apply blink animation to lid
     let lidTop = Math.max(baseLidTop, blinkLidAdjustment);
 
     // Poke/squish reaction overrides
@@ -102,19 +101,16 @@ export function PetSvg({
     } else if (pokeReactionType === 'annoyed') {
       mouth = 'pout';
       blush = false;
-      reactionLidAdjust = 0.25; // Slightly squint eyes when annoyed
+      reactionLidAdjust = 0.25;
     }
 
     // Idle behavior overrides
     if (idleBehavior === 'yawn') {
       mouth = 'yawn';
-      // Eyes squint during yawn
       const yawnSquint = Math.sin(idleBehaviorProgress * Math.PI) * 0.4;
       reactionLidAdjust = Math.max(reactionLidAdjust, yawnSquint);
     } else if (idleBehavior === 'daydream') {
-      // Dreamy eyes - slight unfocus
       reactionLidAdjust = Math.max(reactionLidAdjust, 0.15);
-      // Slight smile
       if (mouth !== 'yawn') {
         mouth = 'smile';
       }
@@ -123,21 +119,18 @@ export function PetSvg({
     // Exploration behavior overrides
     if (explorationBehavior === 'startle' && explorationPhase === 'starting') {
       mouth = 'openSmall';
-      // Eyes wide
       reactionLidAdjust = 0;
     } else if (explorationBehavior === 'reaching' && explorationPhase === 'active') {
-      // Focused expression
       mouth = 'flat';
     }
 
-    // Mouth fidget override (lowest priority - only when no behaviors active)
+    // Mouth fidget override (lowest priority)
     if (mouthFidgetOverride && !pokeReactionType && !idleBehavior && !explorationBehavior) {
       mouth = mouthFidgetOverride;
     }
 
     // Awareness mode effects
     if (awarenessMode === 'curious') {
-      // Slightly widened eyes (less lid coverage)
       reactionLidAdjust = Math.max(0, reactionLidAdjust - 0.05);
     }
 
@@ -169,7 +162,7 @@ export function PetSvg({
     const bh = 58 * sy;
     const bodyY = 100 + offY + animOffY;
 
-    // Edge press deformation - shift control points to create squish effect
+    // Edge press deformation
     const pressOffsetLeft = edgePressX < 0 ? edgePressX * 40 : 0;
     const pressOffsetRight = edgePressX > 0 ? edgePressX * 40 : 0;
 
@@ -177,7 +170,7 @@ export function PetSvg({
       C${100 - bw + pressOffsetLeft},${bodyY - bh * 1.1} ${100 + bw + pressOffsetRight},${bodyY - bh * 1.1} ${100 + bw + pressOffsetRight},${bodyY}
       C${100 + bw + pressOffsetRight},${bodyY + bh * 0.9} ${100 - bw + pressOffsetLeft},${bodyY + bh * 0.9} ${100 - bw + pressOffsetLeft},${bodyY}Z`;
 
-    // Eye positions (shifted slightly with edge press)
+    // Eye positions
     const eyeShiftX = edgePressX * 5;
     const eyeCX_L = 82 + eyeShiftX, eyeCX_R = 118 + eyeShiftX;
     const eyeCY = 95 + offY + animOffY;
@@ -235,12 +228,12 @@ export function PetSvg({
       svg += `<ellipse cx="${eyeCX_R + 6}" cy="${eyeCY + eyeH / 2 + 4}" rx="8" ry="4" fill="#FF8A8A" opacity="0.3"/>`;
     }
 
-    // Mouth (shifted with edge press)
+    // Mouth
     svg += getMouthPath(mouth, 100 + eyeShiftX, eyeCY + eyeH / 2 + 10, munchPhase);
 
     svg += `</g>`;
 
-    // Sleeping ZZZ - show when mouth is yawn (sleepy state)
+    // Sleeping ZZZ
     if (mouth === 'yawn' && !idleBehavior) {
       const zOffset = Math.sin(sec * 1.5) * 2;
       const zBaseX = 135 + animOffX;
@@ -252,7 +245,7 @@ export function PetSvg({
       svg += `</g>`;
     }
 
-    // Daydream thought bubble (subtle)
+    // Daydream thought bubble
     if (idleBehavior === 'daydream' && idleBehaviorProgress > 0.2 && idleBehaviorProgress < 0.8) {
       const bubbleOpacity = Math.sin((idleBehaviorProgress - 0.2) / 0.6 * Math.PI) * 0.4;
       const bubbleX = 140 + animOffX;

@@ -4,3 +4,4 @@ export * from './useEmotionalState';
 export * from './useIdleAnimations';
 export * from './useQuiz';
 export * from './useGameState';
+export * from './useSpatialZones';

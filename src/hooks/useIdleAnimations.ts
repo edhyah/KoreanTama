@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import type { MouthType } from '../types';
+import type { MouthType, BehaviorConfidence } from '../types';
 
 // ============================================
 // Types
@@ -19,13 +19,21 @@ export type ExplorationBehaviorType =
   | 'spotInvestigate'
   | 'followThing'
   | 'startle'
-  | 'reaching';
+  | 'reaching'
+  // New environmental behaviors
+  | 'wallBounce'    // Hit wall, bounce back with surprise
+  | 'cornerHide'    // Tuck into corner, peek out
+  | 'edgePeek'      // Partially offscreen, curious
+  | 'wallClimb'     // Move along wall edge
+  | 'screenTap';    // Look at/interact with spot
 
 export interface ExplorationBehavior {
   type: ExplorationBehaviorType;
   edge?: 'left' | 'right' | 'top' | 'bottom';
+  corner?: 'tl' | 'tr' | 'bl' | 'br';
   target?: { x: number; y: number };
   path?: Array<{ x: number; y: number }>;
+  direction?: 'up' | 'down';
 }
 
 export interface IdleAnimationState {
@@ -529,7 +537,11 @@ export function useIdleAnimations() {
   // Exploration Behaviors
   // ============================================
 
-  const updateExploration = useCallback((now: number, isIdle: boolean): {
+  const updateExploration = useCallback((
+    now: number,
+    isIdle: boolean,
+    confidence?: BehaviorConfidence
+  ): {
     behavior: ExplorationBehavior | null;
     phase: 'starting' | 'active' | 'ending' | null;
     progress: number;
@@ -572,14 +584,27 @@ export function useIdleAnimations() {
           state.explorationPhase = null;
           state.explorationProgress = 0;
           timers.lastExplorationTime = now;
-          timers.nextExplorationDelay = 8000 + Math.random() * 12000;
+          // Apply confidence frequency modifier to delay
+          const baseDelay = 8000 + Math.random() * 12000;
+          const frequencyMod = confidence?.explorationFrequency ?? 1;
+          timers.nextExplorationDelay = baseDelay * frequencyMod;
         }
       }
 
       // Calculate wander/look targets based on behavior
       if (state.currentExploration) {
         const targets = getExplorationTargets(state.currentExploration, state.explorationPhase!, state.explorationProgress, state.followPathIndex);
-        result.wanderTarget = targets.wanderTarget;
+
+        // Apply movement range modifier
+        const rangeMod = confidence?.movementRange ?? 1;
+        if (targets.wanderTarget) {
+          result.wanderTarget = {
+            x: targets.wanderTarget.x * rangeMod,
+            y: targets.wanderTarget.y * rangeMod,
+          };
+        } else {
+          result.wanderTarget = null;
+        }
         result.lookTarget = targets.lookTarget;
 
         // Update follow path index
@@ -600,7 +625,7 @@ export function useIdleAnimations() {
     // Start new exploration if time
     if (!state.currentExploration && !state.currentIdleBehavior && isIdle) {
       if (now - timers.lastExplorationTime > timers.nextExplorationDelay) {
-        const exploration = pickRandomExploration();
+        const exploration = pickRandomExplorationWithConfidence(confidence);
         state.currentExploration = exploration;
         state.explorationPhase = 'starting';
         state.explorationProgress = 0;
@@ -686,6 +711,17 @@ function getExplorationPhaseDurations(type: ExplorationBehaviorType): { starting
       return { starting: 100, active: 500, ending: 1000 };
     case 'reaching':
       return { starting: 500, active: 2000, ending: 500 };
+    // New environmental behaviors
+    case 'wallBounce':
+      return { starting: 800, active: 400, ending: 800 }; // 2s total
+    case 'cornerHide':
+      return { starting: 1500, active: 2500, ending: 1500 }; // 5.5s total
+    case 'edgePeek':
+      return { starting: 2000, active: 2500, ending: 1500 }; // 6s total
+    case 'wallClimb':
+      return { starting: 1000, active: 4000, ending: 1000 }; // 6s total
+    case 'screenTap':
+      return { starting: 800, active: 1500, ending: 700 }; // 3s total
     default:
       return { starting: 1000, active: 2000, ending: 1000 };
   }
@@ -699,11 +735,12 @@ function getExplorationTargets(
 ): { wanderTarget: { x: number; y: number } | null; lookTarget: { x: number; y: number } | null } {
   switch (behavior.type) {
     case 'edgeWander': {
+      // Expanded edge positions for more dramatic exploration
       const edgePositions = {
-        left: { x: -35, y: 0 },
-        right: { x: 35, y: 0 },
-        top: { x: 0, y: -20 },
-        bottom: { x: 0, y: 15 },
+        left: { x: -50, y: 0 },
+        right: { x: 50, y: 0 },
+        top: { x: 0, y: -35 },
+        bottom: { x: 0, y: 25 },
       };
       const edge = behavior.edge || 'left';
       if (phase === 'starting' || phase === 'active') {
@@ -761,6 +798,113 @@ function getExplorationTargets(
       return { wanderTarget: null, lookTarget: { x: 0, y: 0 } };
     }
 
+    // New environmental behaviors
+    case 'wallBounce': {
+      const edge = behavior.edge || 'left';
+      const bouncePositions = {
+        left: { x: -90, y: 0 },
+        right: { x: 90, y: 0 },
+        top: { x: 0, y: -50 },
+        bottom: { x: 0, y: 40 },
+      };
+      if (phase === 'starting') {
+        // Move toward wall
+        return { wanderTarget: bouncePositions[edge], lookTarget: null };
+      }
+      if (phase === 'active') {
+        // Bounce back - reverse direction
+        const reverseDir = edge === 'left' ? 4 : edge === 'right' ? -4 : 0;
+        return { wanderTarget: { x: reverseDir * 10, y: 0 }, lookTarget: { x: reverseDir, y: 0 } };
+      }
+      return { wanderTarget: { x: 0, y: 0 }, lookTarget: { x: 0, y: 0 } };
+    }
+
+    case 'cornerHide': {
+      const corner = behavior.corner || 'bl';
+      const cornerPositions: Record<string, { x: number; y: number }> = {
+        tl: { x: -85, y: -40 },
+        tr: { x: 85, y: -40 },
+        bl: { x: -85, y: 35 },
+        br: { x: 85, y: 35 },
+      };
+      if (phase === 'starting') {
+        // Move to corner
+        return { wanderTarget: cornerPositions[corner], lookTarget: null };
+      }
+      if (phase === 'active') {
+        // Tucked in, periodically peek
+        const peekProgress = (_progress * 3) % 1;
+        if (peekProgress > 0.7 && peekProgress < 0.9) {
+          // Brief peek
+          const peekDir = corner.includes('l') ? 4 : -4;
+          return { wanderTarget: null, lookTarget: { x: peekDir, y: -2 } };
+        }
+        return { wanderTarget: null, lookTarget: { x: 0, y: 2 } };
+      }
+      // Emerge from corner
+      return { wanderTarget: { x: 0, y: 0 }, lookTarget: { x: 0, y: 0 } };
+    }
+
+    case 'edgePeek': {
+      const side = behavior.edge === 'right' ? 'right' : 'left';
+      const offscreenX = side === 'left' ? -120 : 120;
+
+      if (phase === 'starting') {
+        // Move toward edge, then past it
+        return { wanderTarget: { x: offscreenX, y: 0 }, lookTarget: null };
+      }
+      if (phase === 'active') {
+        // Peek back toward center
+        const peekDir = side === 'left' ? 5 : -5;
+        return { wanderTarget: { x: offscreenX * 0.85, y: 0 }, lookTarget: { x: peekDir, y: 0 } };
+      }
+      // Slide back onscreen
+      return { wanderTarget: { x: 0, y: 0 }, lookTarget: { x: 0, y: 0 } };
+    }
+
+    case 'wallClimb': {
+      const wall = behavior.edge === 'right' ? 'right' : 'left';
+      const dir = behavior.direction || 'up';
+      const wallX = wall === 'left' ? -80 : 80;
+
+      if (phase === 'starting') {
+        // Move to wall starting position
+        const startY = dir === 'up' ? 30 : -35;
+        return { wanderTarget: { x: wallX, y: startY }, lookTarget: null };
+      }
+      if (phase === 'active') {
+        // Climb along wall with oscillation
+        const climbY = dir === 'up' ?
+          30 - _progress * 65 : // Moving up
+          -35 + _progress * 65; // Moving down
+        const oscillation = Math.sin(_progress * Math.PI * 4) * 5;
+        return {
+          wanderTarget: { x: wallX + oscillation, y: climbY },
+          lookTarget: { x: 0, y: dir === 'up' ? -3 : 3 },
+        };
+      }
+      return { wanderTarget: { x: 0, y: 0 }, lookTarget: { x: 0, y: 0 } };
+    }
+
+    case 'screenTap': {
+      const tapTarget = behavior.target || {
+        x: (Math.random() - 0.5) * 80,
+        y: (Math.random() - 0.5) * 40,
+      };
+
+      if (phase === 'starting' || phase === 'active') {
+        // Look intently at spot
+        const lookIntensity = phase === 'active' ? 1.2 : 0.8;
+        const normalizedX = (tapTarget.x / 40) * 4 * lookIntensity;
+        const normalizedY = (tapTarget.y / 20) * 2 * lookIntensity;
+        return {
+          wanderTarget: { x: tapTarget.x * 0.3, y: tapTarget.y * 0.3 },
+          lookTarget: { x: normalizedX, y: normalizedY },
+        };
+      }
+      return { wanderTarget: { x: 0, y: 0 }, lookTarget: { x: 0, y: 0 } };
+    }
+
     default:
       return { wanderTarget: null, lookTarget: null };
   }
@@ -769,30 +913,241 @@ function getExplorationTargets(
 function pickRandomExploration(): ExplorationBehavior {
   const roll = Math.random();
 
-  if (roll < 0.25) {
-    // Edge wander
+  // Updated probabilities to include new behaviors
+  // edgeWander: 15%, edgePeer: 10%, spotInvestigate: 10%, followThing: 10%
+  // startle: 10%, reaching: 10%
+  // wallBounce: 10%, cornerHide: 10%, edgePeek: 5%, wallClimb: 5%, screenTap: 5%
+
+  if (roll < 0.15) {
+    // Edge wander (15%)
     const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
     return { type: 'edgeWander', edge: edges[Math.floor(Math.random() * edges.length)] };
-  } else if (roll < 0.40) {
-    // Edge peer
+  } else if (roll < 0.25) {
+    // Edge peer (10%)
     const edges: Array<'left' | 'right'> = ['left', 'right'];
     return { type: 'edgePeer', edge: edges[Math.floor(Math.random() * 2)] };
-  } else if (roll < 0.55) {
-    // Spot investigate
+  } else if (roll < 0.35) {
+    // Spot investigate (10%)
     return {
       type: 'spotInvestigate',
       target: { x: (Math.random() - 0.5) * 60, y: 15 + Math.random() * 15 },
     };
-  } else if (roll < 0.70) {
-    // Follow imaginary thing
+  } else if (roll < 0.45) {
+    // Follow imaginary thing (10%)
     return { type: 'followThing', path: generateFollowPath() };
-  } else if (roll < 0.85) {
-    // Startle
+  } else if (roll < 0.55) {
+    // Startle (10%)
     return { type: 'startle' };
-  } else {
-    // Reaching
+  } else if (roll < 0.65) {
+    // Reaching (10%)
     return { type: 'reaching' };
+  } else if (roll < 0.75) {
+    // Wall bounce (10%)
+    const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+    return { type: 'wallBounce', edge: edges[Math.floor(Math.random() * edges.length)] };
+  } else if (roll < 0.85) {
+    // Corner hide (10%)
+    const corners: Array<'tl' | 'tr' | 'bl' | 'br'> = ['tl', 'tr', 'bl', 'br'];
+    return { type: 'cornerHide', corner: corners[Math.floor(Math.random() * corners.length)] };
+  } else if (roll < 0.90) {
+    // Edge peek (5%)
+    const sides: Array<'left' | 'right'> = ['left', 'right'];
+    return { type: 'edgePeek', edge: sides[Math.floor(Math.random() * 2)] };
+  } else if (roll < 0.95) {
+    // Wall climb (5%)
+    const walls: Array<'left' | 'right'> = ['left', 'right'];
+    const directions: Array<'up' | 'down'> = ['up', 'down'];
+    return {
+      type: 'wallClimb',
+      edge: walls[Math.floor(Math.random() * 2)],
+      direction: directions[Math.floor(Math.random() * 2)],
+    };
+  } else {
+    // Screen tap (5%)
+    return {
+      type: 'screenTap',
+      target: {
+        x: (Math.random() - 0.5) * 80,
+        y: (Math.random() - 0.5) * 40,
+      },
+    };
   }
+}
+
+/**
+ * Pick exploration behavior with confidence-based weighting
+ *
+ * Bold: Favor adventurous behaviors (wallClimb, screenTap, edgePeek)
+ * Timid: Favor safe behaviors (cornerHide, edgePeer); avoid bold behaviors
+ * Cautious: Smaller wander targets, prefer center-staying behaviors
+ * Normal: Standard probabilities
+ */
+function pickRandomExplorationWithConfidence(confidence?: BehaviorConfidence): ExplorationBehavior {
+  if (!confidence || confidence.level === 'normal') {
+    return pickRandomExploration();
+  }
+
+  const roll = Math.random();
+
+  if (confidence.level === 'bold') {
+    // Bold: more adventurous exploration
+    // Increase wallClimb, screenTap, edgePeek; decrease cautious behaviors
+    if (roll < 0.12) {
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'edgeWander', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.18) {
+      const edges: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeer', edge: edges[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.26) {
+      return {
+        type: 'spotInvestigate',
+        target: { x: (Math.random() - 0.5) * 80, y: 15 + Math.random() * 20 }, // Larger range
+      };
+    } else if (roll < 0.34) {
+      return { type: 'followThing', path: generateFollowPath() };
+    } else if (roll < 0.40) {
+      return { type: 'startle' };
+    } else if (roll < 0.48) {
+      return { type: 'reaching' };
+    } else if (roll < 0.56) {
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'wallBounce', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.62) {
+      // Less corner hiding when bold
+      const corners: Array<'tl' | 'tr' | 'bl' | 'br'> = ['tl', 'tr', 'bl', 'br'];
+      return { type: 'cornerHide', corner: corners[Math.floor(Math.random() * corners.length)] };
+    } else if (roll < 0.74) {
+      // More edge peeking when bold
+      const sides: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeek', edge: sides[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.88) {
+      // More wall climbing when bold
+      const walls: Array<'left' | 'right'> = ['left', 'right'];
+      const directions: Array<'up' | 'down'> = ['up', 'down'];
+      return {
+        type: 'wallClimb',
+        edge: walls[Math.floor(Math.random() * 2)],
+        direction: directions[Math.floor(Math.random() * 2)],
+      };
+    } else {
+      // More screen tapping when bold
+      return {
+        type: 'screenTap',
+        target: {
+          x: (Math.random() - 0.5) * 100,
+          y: (Math.random() - 0.5) * 50,
+        },
+      };
+    }
+  }
+
+  if (confidence.level === 'timid') {
+    // Timid: favor hiding, avoid adventurous behaviors
+    if (roll < 0.10) {
+      // Less edge wandering
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'edgeWander', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.25) {
+      // More edge peering (cautious looking)
+      const edges: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeer', edge: edges[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.30) {
+      // Less spot investigating
+      return {
+        type: 'spotInvestigate',
+        target: { x: (Math.random() - 0.5) * 30, y: 10 + Math.random() * 10 }, // Smaller range
+      };
+    } else if (roll < 0.38) {
+      return { type: 'followThing', path: generateFollowPath() };
+    } else if (roll < 0.48) {
+      // More startling when timid (easily spooked)
+      return { type: 'startle' };
+    } else if (roll < 0.52) {
+      // Less reaching
+      return { type: 'reaching' };
+    } else if (roll < 0.56) {
+      // Less wall bouncing (too bold)
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'wallBounce', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.80) {
+      // MUCH more corner hiding when timid
+      const corners: Array<'tl' | 'tr' | 'bl' | 'br'> = ['tl', 'tr', 'bl', 'br'];
+      return { type: 'cornerHide', corner: corners[Math.floor(Math.random() * corners.length)] };
+    } else if (roll < 0.85) {
+      // Some edge peeking (cautious curiosity)
+      const sides: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeek', edge: sides[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.90) {
+      // Very little wall climbing
+      const walls: Array<'left' | 'right'> = ['left', 'right'];
+      const directions: Array<'up' | 'down'> = ['up', 'down'];
+      return {
+        type: 'wallClimb',
+        edge: walls[Math.floor(Math.random() * 2)],
+        direction: directions[Math.floor(Math.random() * 2)],
+      };
+    } else {
+      // Very little screen tapping
+      return {
+        type: 'screenTap',
+        target: {
+          x: (Math.random() - 0.5) * 40,
+          y: (Math.random() - 0.5) * 20,
+        },
+      };
+    }
+  }
+
+  // Cautious: prefer center, moderate exploration
+  if (confidence.level === 'cautious') {
+    if (roll < 0.12) {
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'edgeWander', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.24) {
+      const edges: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeer', edge: edges[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.36) {
+      // More spot investigating (stay near center)
+      return {
+        type: 'spotInvestigate',
+        target: { x: (Math.random() - 0.5) * 40, y: 10 + Math.random() * 12 },
+      };
+    } else if (roll < 0.48) {
+      return { type: 'followThing', path: generateFollowPath() };
+    } else if (roll < 0.56) {
+      return { type: 'startle' };
+    } else if (roll < 0.64) {
+      return { type: 'reaching' };
+    } else if (roll < 0.72) {
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      return { type: 'wallBounce', edge: edges[Math.floor(Math.random() * edges.length)] };
+    } else if (roll < 0.84) {
+      const corners: Array<'tl' | 'tr' | 'bl' | 'br'> = ['tl', 'tr', 'bl', 'br'];
+      return { type: 'cornerHide', corner: corners[Math.floor(Math.random() * corners.length)] };
+    } else if (roll < 0.90) {
+      const sides: Array<'left' | 'right'> = ['left', 'right'];
+      return { type: 'edgePeek', edge: sides[Math.floor(Math.random() * 2)] };
+    } else if (roll < 0.96) {
+      const walls: Array<'left' | 'right'> = ['left', 'right'];
+      const directions: Array<'up' | 'down'> = ['up', 'down'];
+      return {
+        type: 'wallClimb',
+        edge: walls[Math.floor(Math.random() * 2)],
+        direction: directions[Math.floor(Math.random() * 2)],
+      };
+    } else {
+      return {
+        type: 'screenTap',
+        target: {
+          x: (Math.random() - 0.5) * 60,
+          y: (Math.random() - 0.5) * 30,
+        },
+      };
+    }
+  }
+
+  // Fallback
+  return pickRandomExploration();
 }
 
 function generateFollowPath(): Array<{ x: number; y: number }> {
