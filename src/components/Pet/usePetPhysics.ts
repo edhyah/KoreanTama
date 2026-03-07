@@ -10,6 +10,10 @@ export interface PetPhysics {
   pupilOffsetY: Spring;
   wanderX: Spring;
   wanderY: Spring;
+  // New: edge press effect
+  edgePressX: Spring;
+  // New: stretch/reach effect
+  stretchY: Spring;
 }
 
 export function usePetPhysics() {
@@ -20,8 +24,12 @@ export function usePetPhysics() {
     bodyOffY: new Spring(0, 0.12, 0.8),
     pupilOffsetX: new Spring(0, 0.1, 0.85),
     pupilOffsetY: new Spring(0, 0.1, 0.85),
-    wanderX: new Spring(0, 0.02, 0.92),
-    wanderY: new Spring(0, 0.02, 0.92),
+    wanderX: new Spring(0, 0.08, 0.88),
+    wanderY: new Spring(0, 0.08, 0.88),
+    // Edge press (horizontal squish against wall)
+    edgePressX: new Spring(0, 0.08, 0.85),
+    // Stretch (vertical elongation for yawn/reach)
+    stretchY: new Spring(0, 0.06, 0.88),
   });
 
   const updateAll = useCallback(() => {
@@ -34,6 +42,8 @@ export function usePetPhysics() {
     p.pupilOffsetY.update();
     p.wanderX.update();
     p.wanderY.update();
+    p.edgePressX.update();
+    p.stretchY.update();
   }, []);
 
   const applyPoke = useCallback((touchX: number, touchY: number, petCenterX: number, petCenterY: number) => {
@@ -103,6 +113,8 @@ export function usePetPhysics() {
       pupilOffsetY: p.pupilOffsetY.value,
       wanderX: p.wanderX.value,
       wanderY: p.wanderY.value,
+      edgePressX: p.edgePressX.value,
+      stretchY: p.stretchY.value,
     };
   }, []);
 
@@ -110,6 +122,44 @@ export function usePetPhysics() {
     const p = physicsRef.current;
     p.wanderX.target = 0;
     p.wanderY.target = 0;
+  }, []);
+
+  // New: Edge press effect (squish against invisible wall)
+  const setEdgePress = useCallback((direction: 'left' | 'right' | null) => {
+    const p = physicsRef.current;
+    if (direction === 'left') {
+      p.edgePressX.target = -0.15; // Squish to the left
+    } else if (direction === 'right') {
+      p.edgePressX.target = 0.15; // Squish to the right
+    } else {
+      p.edgePressX.target = 0;
+    }
+  }, []);
+
+  // New: Stretch effect for yawn/reach
+  const applyStretch = useCallback((amount: number = 0.08) => {
+    const p = physicsRef.current;
+    p.stretchY.target = amount;
+    // Auto-release after a delay
+    setTimeout(() => {
+      p.stretchY.target = 0;
+    }, 1500);
+  }, []);
+
+  // New: Twitch impulse (brief squish)
+  const applyTwitch = useCallback(() => {
+    const p = physicsRef.current;
+    p.bodyScaleX.impulse(-0.05);
+    p.bodyScaleY.impulse(0.03);
+    p.bodyOffY.impulse(-3);
+  }, []);
+
+  // New: Startle jump
+  const applyStartle = useCallback(() => {
+    const p = physicsRef.current;
+    p.bodyOffY.impulse(-15);
+    p.bodyScaleY.impulse(0.1);
+    p.bodyScaleX.impulse(-0.05);
   }, []);
 
   return {
@@ -122,5 +172,10 @@ export function usePetPhysics() {
     setWanderTarget,
     resetWander,
     getValues,
+    // New
+    setEdgePress,
+    applyStretch,
+    applyTwitch,
+    applyStartle,
   };
 }

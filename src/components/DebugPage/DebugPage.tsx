@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { EmotionsGrid } from './EmotionsGrid';
 import { AnimationSandbox } from './AnimationSandbox';
 import { ReactionTester } from './ReactionTester';
+import { BehaviorTester } from './BehaviorTester';
 
-type TabName = 'emotions' | 'sandbox' | 'reactions';
+type TabName = 'emotions' | 'sandbox' | 'reactions' | 'behaviors';
 
 interface DebugPageProps {
   onClose: () => void;
@@ -41,12 +42,19 @@ export function DebugPage({ onClose }: DebugPageProps) {
           >
             Reaction Tester
           </button>
+          <button
+            onClick={() => setActiveTab('behaviors')}
+            className={`debug-tab ${activeTab === 'behaviors' ? 'active' : ''}`}
+          >
+            Behavior Tester
+          </button>
         </div>
 
         <div className="debug-tab-content">
           {activeTab === 'emotions' && <EmotionsGrid />}
           {activeTab === 'sandbox' && <AnimationSandbox />}
           {activeTab === 'reactions' && <ReactionTester />}
+          {activeTab === 'behaviors' && <BehaviorTester />}
         </div>
       </div>
     </div>
