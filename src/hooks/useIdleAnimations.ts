@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import type { MouthType } from '../types';
 
 // ============================================
 // Types
@@ -9,6 +10,8 @@ export type BlinkType = 'normal' | 'double' | 'slow';
 export type AwarenessMode = 'idle' | 'noticing' | 'glancing' | 'curious' | 'ignoring';
 
 export type IdleBehaviorType = 'yawn' | 'twitch' | 'daydream';
+
+export type MouthFidgetType = 'relax' | 'soften' | 'breathe' | 'microSmile' | 'prideSoften';
 
 export type ExplorationBehaviorType =
   | 'edgeWander'
@@ -46,6 +49,10 @@ export interface IdleAnimationState {
   // Breath variation
   breathMultiplier: number;
   isSighing: boolean;
+  // Mouth fidgets
+  currentMouthFidget: MouthFidgetType | null;
+  mouthFidgetProgress: number;
+  mouthTargetMouth: MouthType | null;
 }
 
 // ============================================
@@ -74,6 +81,10 @@ export function useIdleAnimations() {
     // Breath
     breathMultiplier: 1,
     isSighing: false,
+    // Mouth fidgets
+    currentMouthFidget: null,
+    mouthFidgetProgress: 0,
+    mouthTargetMouth: null,
   });
 
   const timersRef = useRef({
@@ -101,6 +112,10 @@ export function useIdleAnimations() {
     // Breath
     lastSighTime: 0,
     nextSighDelay: 15000 + Math.random() * 25000,
+    // Mouth fidgets
+    lastMouthFidgetTime: 0,
+    nextMouthFidgetDelay: 3000 + Math.random() * 5000,
+    mouthFidgetStartTime: 0,
   });
 
   // ============================================
@@ -452,6 +467,65 @@ export function useIdleAnimations() {
   }, []);
 
   // ============================================
+  // Mouth Fidgets
+  // ============================================
+
+  const updateMouthFidgets = useCallback((now: number, isIdle: boolean, baseMouth: MouthType): MouthType | null => {
+    const state = stateRef.current;
+    const timers = timersRef.current;
+
+    // Skip if other behaviors are active (they have priority)
+    if (state.currentIdleBehavior || state.currentExploration) {
+      state.currentMouthFidget = null;
+      state.mouthFidgetProgress = 0;
+      state.mouthTargetMouth = null;
+      return null;
+    }
+
+    // Skip non-fidgetable mouths (these are used by active behaviors)
+    const nonFidgetable: MouthType[] = ['yawn', 'munch', 'pant'];
+    if (nonFidgetable.includes(baseMouth)) {
+      return null;
+    }
+
+    // Update current fidget if active
+    if (state.currentMouthFidget) {
+      const elapsed = now - timers.mouthFidgetStartTime;
+      const duration = getMouthFidgetDuration(state.currentMouthFidget);
+      state.mouthFidgetProgress = Math.min(1, elapsed / duration);
+
+      // Return target mouth during peak of fidget (30-70% progress)
+      if (state.mouthFidgetProgress >= 0.3 && state.mouthFidgetProgress <= 0.7) {
+        return state.mouthTargetMouth;
+      }
+
+      // Fidget complete
+      if (state.mouthFidgetProgress >= 1) {
+        state.currentMouthFidget = null;
+        state.mouthFidgetProgress = 0;
+        state.mouthTargetMouth = null;
+        timers.lastMouthFidgetTime = now;
+        timers.nextMouthFidgetDelay = 3000 + Math.random() * 5000;
+      }
+
+      return null;
+    }
+
+    // Start new fidget if time and idle
+    if (isIdle && now - timers.lastMouthFidgetTime > timers.nextMouthFidgetDelay) {
+      const fidget = pickMouthFidget(baseMouth);
+      if (fidget) {
+        state.currentMouthFidget = fidget.type;
+        state.mouthTargetMouth = fidget.targetMouth;
+        state.mouthFidgetProgress = 0;
+        timers.mouthFidgetStartTime = now;
+      }
+    }
+
+    return null;
+  }, []);
+
+  // ============================================
   // Exploration Behaviors
   // ============================================
 
@@ -587,6 +661,7 @@ export function useIdleAnimations() {
     triggerSigh,
     updateIdleBehaviors,
     triggerIdleBehavior,
+    updateMouthFidgets,
     updateExploration,
     triggerExploration,
     getState,
@@ -735,4 +810,96 @@ function generateFollowPath(): Array<{ x: number; y: number }> {
   }
 
   return points;
+}
+
+// ============================================
+// Mouth Fidget Helpers
+// ============================================
+
+function getMouthFidgetDuration(type: MouthFidgetType): number {
+  switch (type) {
+    case 'relax':
+      return 800; // Brief relaxation
+    case 'soften':
+      return 1000; // Intensity softening
+    case 'breathe':
+      return 600; // Breathing rhythm
+    case 'microSmile':
+      return 1200; // Rare, subtle
+    case 'prideSoften':
+      return 900; // Pride softening
+    default:
+      return 800;
+  }
+}
+
+function pickMouthFidget(baseMouth: MouthType): { type: MouthFidgetType; targetMouth: MouthType } | null {
+  // Define transitions based on base mouth
+  // Weighted random selection for contextual appropriateness
+  const roll = Math.random();
+
+  switch (baseMouth) {
+    case 'smile':
+      // smile → flat (brief relaxation)
+      if (roll < 0.7) {
+        return { type: 'relax', targetMouth: 'flat' };
+      }
+      return null;
+
+    case 'bigSmile':
+      // bigSmile → smile (intensity softening)
+      if (roll < 0.6) {
+        return { type: 'soften', targetMouth: 'smile' };
+      }
+      return null;
+
+    case 'frown':
+      // frown → flat (sad breathing)
+      if (roll < 0.5) {
+        return { type: 'breathe', targetMouth: 'flat' };
+      }
+      return null;
+
+    case 'flat':
+      // flat → smile (rare occasional micro-smile)
+      if (roll < 0.2) {
+        return { type: 'microSmile', targetMouth: 'smile' };
+      }
+      return null;
+
+    case 'open':
+      // open → openSmall (breathing rhythm)
+      if (roll < 0.6) {
+        return { type: 'breathe', targetMouth: 'openSmall' };
+      }
+      return null;
+
+    case 'openSmall':
+      // openSmall → flat (settling)
+      if (roll < 0.4) {
+        return { type: 'relax', targetMouth: 'flat' };
+      }
+      return null;
+
+    case 'smirk':
+      // smirk → smile (pride softening)
+      if (roll < 0.5) {
+        return { type: 'prideSoften', targetMouth: 'smile' };
+      }
+      return null;
+
+    case 'wavy':
+      // wavy → flat (uncertain settling)
+      if (roll < 0.4) {
+        return { type: 'relax', targetMouth: 'flat' };
+      }
+      return null;
+
+    case 'pout':
+      // pout stays pouty - no fidgets
+      return null;
+
+    default:
+      return null;
+  }
 }

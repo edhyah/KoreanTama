@@ -16,6 +16,7 @@ export function SleepOverlay({ visible, onWake, animationTime }: SleepOverlayPro
       onClick={onWake}
     >
       <PetSvg
+        id="sleep-overlay"
         color={sleepyState.color}
         scaleX={sleepyState.scaleX}
         scaleY={sleepyState.scaleY}

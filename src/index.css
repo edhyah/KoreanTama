@@ -79,6 +79,10 @@ body {
   transition: transform 0.05s linear;
 }
 
+.creature-zone.sleeping {
+  visibility: hidden;
+}
+
 .pet-container {
   position: relative;
   width: 220px;

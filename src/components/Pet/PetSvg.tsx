@@ -5,6 +5,7 @@ import { lerpColor } from '../../utils/colors';
 import type { IdleBehaviorType, ExplorationBehaviorType, AwarenessMode } from '../../hooks/useIdleAnimations';
 
 export interface PetSvgProps {
+  id?: string;  // Unique ID prefix for SVG elements (to avoid clip-path conflicts)
   color: string;
   scaleX: number;
   scaleY: number;
@@ -36,9 +37,11 @@ export interface PetSvgProps {
   explorationBehavior?: ExplorationBehaviorType | null;
   explorationPhase?: 'starting' | 'active' | 'ending' | null;
   awarenessMode?: AwarenessMode;
+  mouthFidgetOverride?: MouthType | null;
 }
 
 export function PetSvg({
+  id = 'pet',
   color,
   scaleX: baseScaleX,
   scaleY: baseScaleY,
@@ -68,6 +71,7 @@ export function PetSvg({
   explorationBehavior = null,
   explorationPhase = null,
   awarenessMode = 'idle',
+  mouthFidgetOverride = null,
 }: PetSvgProps) {
   const svgContent = useMemo(() => {
     // Apply spring physics to scale
@@ -124,6 +128,11 @@ export function PetSvg({
     } else if (explorationBehavior === 'reaching' && explorationPhase === 'active') {
       // Focused expression
       mouth = 'flat';
+    }
+
+    // Mouth fidget override (lowest priority - only when no behaviors active)
+    if (mouthFidgetOverride && !pokeReactionType && !idleBehavior && !explorationBehavior) {
+      mouth = mouthFidgetOverride;
     }
 
     // Awareness mode effects
@@ -203,7 +212,7 @@ export function PetSvg({
 
     // Eyes
     [eyeCX_L, eyeCX_R].forEach((cx, i) => {
-      const clipId = `eye-clip-${i}`;
+      const clipId = `${id}-eye-clip-${i}`;
       const eyeTop = eyeCY - eyeH / 2;
       const lidY = eyeTop + eyeH * lidTop;
 
@@ -260,13 +269,20 @@ export function PetSvg({
 
     return svg;
   }, [
-    color, baseScaleX, baseScaleY, offY, eyeW, eyeH, pupilR, baseLidTop, baseMouth, baseBlush, anim,
+    id, color, baseScaleX, baseScaleY, offY, eyeW, eyeH, pupilR, baseLidTop, baseMouth, baseBlush, anim,
     animationTime, bodyScaleX, bodyScaleY, bodyOffX, bodyOffY, pupilOffsetX, pupilOffsetY,
     blinkLidAdjustment, pokeReactionType, edgePressX, stretchY, wanderX, wanderY, idleBehavior, idleBehaviorProgress,
-    explorationBehavior, explorationPhase, awarenessMode
+    explorationBehavior, explorationPhase, awarenessMode, mouthFidgetOverride
   ]);
 
   return (
-    <svg viewBox="0 0 200 200" width="220" height="220" overflow="visible" dangerouslySetInnerHTML={{ __html: svgContent }} />
+    <svg
+      viewBox="0 0 200 200"
+      width="220"
+      height="220"
+      overflow="visible"
+      style={{ pointerEvents: 'none' }}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
   );
 }

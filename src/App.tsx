@@ -261,10 +261,15 @@ export default function App() {
           setTimeout(() => gameActions.decideDefaultState(), 2200);
         } else if (justMetGoal) {
           petRef.current?.setEmotionalState('proud');
-          showPop('잘했어!', true);
+          setThoughtText('잘했어!');
+          setThoughtVisible(true);
+          speak('잘했어!');
           setGoalPulse(true);
           setTimeout(() => setGoalPulse(false), 2000);
-          setTimeout(() => gameActions.decideDefaultState(), 2200);
+          setTimeout(() => {
+            setThoughtVisible(false);
+            gameActions.decideDefaultState();
+          }, 2200);
         } else {
           let responseText: string;
           let doExtraCelebration = false;
@@ -330,12 +335,11 @@ export default function App() {
   const handlePetClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (!gameState.awake) return;
-    if (['flying', 'walking', 'discovering', 'eating'].includes(gameState.gameState)) return;
 
-    // Poke reaction
+    // Poke reaction - always works when awake
     petRef.current?.handlePoke(e.clientX, e.clientY);
     gameActions.boostHappiness(2);
-  }, [gameState.awake, gameState.gameState, gameActions]);
+  }, [gameState.awake, gameActions]);
 
   const handleThoughtBubbleClick = useCallback(() => {
     if (quiz.quizState.currentWord) {
@@ -526,7 +530,7 @@ export default function App() {
         visible={gameState.awake}
       />
 
-      <div ref={creatureZoneRef} className="creature-zone" style={creatureZoneStyle}>
+      <div ref={creatureZoneRef} className={`creature-zone ${!gameState.awake ? 'sleeping' : ''}`} style={creatureZoneStyle}>
         <ThoughtBubble
           text={thoughtText}
           visible={thoughtVisible}

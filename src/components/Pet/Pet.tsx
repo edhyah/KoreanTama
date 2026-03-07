@@ -56,35 +56,6 @@ export const Pet = forwardRef<PetRef, PetProps>(({
   const cursorPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastCursorMoveRef = useRef<number>(0);
 
-  // Check if a click is on the actual character (not the surrounding container)
-  const isClickOnCharacter = useCallback((e: React.MouseEvent): boolean => {
-    if (!containerRef.current) return false;
-    const rect = containerRef.current.getBoundingClientRect();
-
-    // Get click position relative to container
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    // Container is 220x220, SVG viewBox is 200x200
-    // Character body is centered at (100, 100) in viewBox = (110, 110) in container
-    // Body is roughly 84 wide x 116 tall in viewBox units, scaled by 1.1
-    const centerX = 110;
-    const centerY = 110;
-    const radiusX = 50;  // Approximate horizontal radius in pixels
-    const radiusY = 70;  // Approximate vertical radius in pixels
-
-    // Check if click is within the character's ellipse
-    const dx = (clickX - centerX) / radiusX;
-    const dy = (clickY - centerY) / radiusY;
-    return (dx * dx + dy * dy) <= 1;
-  }, []);
-
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    if (isClickOnCharacter(e)) {
-      onClick?.(e);
-    }
-  }, [onClick, isClickOnCharacter]);
-
   const {
     currentState,
     setEmotionalState,
@@ -95,6 +66,12 @@ export const Pet = forwardRef<PetRef, PetProps>(({
   const physics = usePetPhysics();
   const idleAnimations = useIdleAnimations();
 
+  // Handle clicks on the pet container
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // Any click on the pet-container counts as clicking the character
+    onClick?.(e);
+  }, [onClick]);
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     setEmotionalState,
@@ -103,6 +80,9 @@ export const Pet = forwardRef<PetRef, PetProps>(({
       const rect = containerRef.current.getBoundingClientRect();
       const petCenterX = rect.left + rect.width / 2;
       const petCenterY = rect.top + rect.height / 2;
+
+      // Always apply poke physics
+      physics.applyPoke(touchX, touchY, petCenterX, petCenterY);
 
       // Track taps within 5 second window
       const now = performance.now();
@@ -125,27 +105,22 @@ export const Pet = forwardRef<PetRef, PetProps>(({
         tapTracking.count = 0;
       }, 5000);
 
+      // Clear any existing reaction timeout
+      if (pokeReactionRef.current.timeout) {
+        clearTimeout(pokeReactionRef.current.timeout);
+      }
+
       // If tapped more than 2 times within 5 seconds, get annoyed
       if (tapTracking.count > 2) {
-        physics.applySquish();
         pokeReactionRef.current.type = 'annoyed';
-        if (pokeReactionRef.current.timeout) {
-          clearTimeout(pokeReactionRef.current.timeout);
-        }
         pokeReactionRef.current.timeout = window.setTimeout(() => {
           pokeReactionRef.current.type = null;
         }, 800);
         return;
       }
 
-      // Normal poke behavior
-      physics.applyPoke(touchX, touchY, petCenterX, petCenterY);
-
-      // Show brief reaction
+      // Normal poke reaction: surprised then happy
       pokeReactionRef.current.type = 'surprised';
-      if (pokeReactionRef.current.timeout) {
-        clearTimeout(pokeReactionRef.current.timeout);
-      }
 
       // After brief surprise, show happy
       setTimeout(() => {
@@ -380,9 +355,17 @@ export const Pet = forwardRef<PetRef, PetProps>(({
 
   // Get current behavior state for visual modifications
   const now = performance.now();
-  const idleBehavior = idleAnimations.updateIdleBehaviors(now, gameState === 'idle' && !isQuizActive);
-  const exploration = idleAnimations.updateExploration(now, gameState === 'idle' && !isQuizActive);
+  const isIdle = gameState === 'idle' && !isQuizActive;
+  const idleBehavior = idleAnimations.updateIdleBehaviors(now, isIdle);
+  const exploration = idleAnimations.updateExploration(now, isIdle);
   const animState = idleAnimations.getState();
+
+  // Get mouth fidget override (only when truly idle)
+  const mouthFidgetOverride = idleAnimations.updateMouthFidgets(
+    now,
+    isIdle && !pokeReactionRef.current.type,
+    interpolatedState.mouth as MouthType
+  );
 
   return (
     <div
@@ -422,6 +405,7 @@ export const Pet = forwardRef<PetRef, PetProps>(({
         explorationBehavior={exploration.behavior?.type || null}
         explorationPhase={exploration.phase}
         awarenessMode={animState.awarenessMode}
+        mouthFidgetOverride={mouthFidgetOverride}
       />
     </div>
   );

@@ -3,7 +3,7 @@ import type { EmotionalStates } from '../types';
 export const EMOTIONAL_STATES: EmotionalStates = {
   sleepy: {
     color: "#9BB8C9", scaleX: 1.02, scaleY: 0.96, offY: 2,
-    eyeW: 16, eyeH: 10, pupilR: 6, lidTop: 0.55,
+    eyeW: 16, eyeH: 16, pupilR: 5, lidTop: 0.35,
     mouth: "yawn", blush: false, anim: "drift",
     phrases: ["졸려요...💤", "잘 자요~", "눈이 감겨요..."]
   },
